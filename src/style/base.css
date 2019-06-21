@@ -14,6 +14,9 @@ body {
 img:not([src]) {
   display: none;
 }
+video:not([src]) {
+  display: none;
+}
 #drag {
   position: absolute;
   left: 0;
@@ -24,7 +27,8 @@ img:not([src]) {
   display: none;
   -webkit-app-region: drag;
 }
-#image {
+img,
+video {
   position: absolute;
   left: 0;
   right: 0;

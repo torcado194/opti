@@ -2,6 +2,8 @@ const {ipcRenderer} = require('electron');
 
 let canDrag = false,
     imgEl,
+    vidEl,
+    curEl,
     width = 0,
     height = 0,
     zoom = 1,
@@ -12,6 +14,11 @@ function init(){
     console.log('ready');
     
     ipcRenderer.send('resize', 500, 500);
+    
+    curEl = imgEl = document.getElementById('image');
+    vidEl = document.getElementById('video');
+    
+    console.log(screen);
     
     /*window.addEventListener('keydown', e => {
         if(e.key === 'Shift'){
@@ -77,15 +84,41 @@ function moveWindow() {
 
 
 function load(data){
-    imgEl = document.getElementById('image');
-    imgEl.setAttribute('src', data);
-    imgEl.onload = loadDone;
+    let mime;
+    if(data[5] === 'i'){
+        mime = 'image';
+        
+        if(curEl !== imgEl){
+            curEl.removeAttribute('src');
+        }
+        
+        curEl = imgEl;
+        curEl.setAttribute('src', data);
+        curEl.onload = loadDone;
+    } else if(data[5] === 'v'){
+        mime = 'video';
+        
+        if(curEl !== imgEl){
+            curEl.removeAttribute('src');
+        }
+        
+        curEl = vidEl;
+        curEl.setAttribute('src', data);
+        curEl.onloadedmetadata = loadDone;
+    } else {
+        mime = undefined;
+    }
     zoom = 1;
 }
 
 function loadDone(){
-    width = imgEl.naturalWidth;
-    height = imgEl.naturalHeight;
+    if(curEl === imgEl){
+        width = curEl.naturalWidth;
+        height = curEl.naturalHeight;
+    } else if(curEl === vidEl) {
+        width = curEl.videoWidth;
+        height = curEl.videoHeight;
+    }
     ipcRenderer.send('resize', width, height);
 }
 
@@ -121,7 +154,7 @@ window.addEventListener('mousewheel', onMouseWheel);
 
 function onMouseWheel(e){
     if(zoom === 0){
-        let scale = Math.min(imgEl.clientWidth, imgEl.clientHeight) / Math.min(width, height);
+        let scale = Math.min(curEl.clientWidth, curEl.clientHeight) / Math.min(width, height);
         console.log(scale);
         zoom = Math.round(scale);
     }
@@ -130,10 +163,12 @@ function onMouseWheel(e){
     } else {
         zoom++;
     }
-    imgEl.setAttribute('width', width * zoom);
-    imgEl.classList.add('pixel');
+    let newWidth = Math.min(screen.availWidth, width * zoom);
+    let newHeight = Math.min(screen.availHeight, height * zoom);
+    curEl.setAttribute('width', newWidth);
+    curEl.classList.add('pixel');
     ignoreResize.push(true);
-    ipcRenderer.send('resize', width * zoom, height * zoom, true);
+    ipcRenderer.send('resize', newWidth, newHeight, true);
 }
 
 window.addEventListener('resize', onResize);
@@ -144,5 +179,5 @@ function onResize(e){
         return;
     }
     zoom = 0;
-    imgEl.classList.remove('pixel');
+    curEl.classList.remove('pixel');
 }
