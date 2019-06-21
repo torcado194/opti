@@ -5,14 +5,16 @@ let screen;
 
 require('electron-reload')(__dirname);
 
-let win;
+let win,
+    minWidth = 40,
+    minHeight = 40;
 
 function createWindow(){
     win = new BrowserWindow({
         width: 800,
         height: 600,
-        minWidth: 40,
-        minHeight: 40,
+        minWidth,
+        minHeight,
         transparent: true,
         resizable: true,
         //icon: __dirname + '/icon.png',
@@ -40,8 +42,8 @@ ipcMain.on('resize', (e, w, h, center) => {
     win.setSize(w, h);
     if(center){
         let {width, height} = screen.getPrimaryDisplay().workAreaSize;
-        w = Math.min(w, width + 20);
-        h = Math.min(h, height + 60);
+        w = Math.max(minWidth, Math.min(w, width + 20));
+        h = Math.max(minHeight, Math.min(h, height + 60));
         console.log(w, oldW, h, oldH);
         win.setPosition(oldX + Math.floor((oldW - w) / 2), oldY + Math.floor((oldH - h) / 2));
     }

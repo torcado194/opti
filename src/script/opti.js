@@ -6,6 +6,7 @@ let canDrag = false,
     curEl,
     width = 0,
     height = 0,
+    zoomStage = 0,
     zoom = 1,
     ignoreResize = [],
     filePath;
@@ -109,6 +110,7 @@ function load(data){
         mime = undefined;
     }
     zoom = 1;
+    zoomStage = 0;
 }
 
 function loadDone(){
@@ -153,22 +155,34 @@ function drop(e){
 window.addEventListener('mousewheel', onMouseWheel);
 
 function onMouseWheel(e){
-    if(zoom === 0){
+    if(zoom < 1 || true){
         let scale = Math.min(curEl.clientWidth, curEl.clientHeight) / Math.min(width, height);
         console.log(scale);
-        zoom = Math.round(scale);
+        if(scale >= 1){
+            zoomStage = Math.round(scale) - 1;
+        } else {
+            zoomStage = 1 - Math.round(1/scale);
+        }
     }
     if(e.deltaY > 0){
-        zoom = Math.max(1, zoom - 1);
+        zoomStage--;
     } else {
-        zoom++;
+        zoomStage++;
     }
+    
+    if(zoomStage >= 0){
+        zoom = zoomStage + 1;
+        curEl.classList.add('pixel');
+    } else {
+        zoom = 1 / (Math.abs(zoomStage) + 1);
+        curEl.classList.remove('pixel');
+    }
+    
     let newWidth = Math.min(screen.availWidth, width * zoom);
     let newHeight = Math.min(screen.availHeight, height * zoom);
     curEl.setAttribute('width', newWidth);
-    curEl.classList.add('pixel');
     ignoreResize.push(true);
-    ipcRenderer.send('resize', newWidth, newHeight, true);
+    ipcRenderer.send('resize', Math.round(newWidth), Math.round(newHeight), true);
 }
 
 window.addEventListener('resize', onResize);
