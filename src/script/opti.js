@@ -121,7 +121,7 @@ function loadDone(){
         width = curEl.videoWidth;
         height = curEl.videoHeight;
     }
-    ipcRenderer.send('resize', width, height);
+    ipcRenderer.send('resize', width, height, true);
 }
 
 window.addEventListener('dragover', drag);
