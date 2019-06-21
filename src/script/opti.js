@@ -20,7 +20,8 @@ let canDrag = false,
     localFiles = [],
     fileIndex = 0,
     shift,
-    ctrl;
+    ctrl,
+    border = false;
 
 function init(){
     console.log('ready');
@@ -31,6 +32,8 @@ function init(){
     vidEl = document.getElementById('video');
     
     console.log(screen);
+    
+    border = document.body.classList.contains('border');
     
     window.addEventListener('keydown', e => {
         if(e.key === 'Shift'){
@@ -56,6 +59,9 @@ function init(){
                 break;
             case 'ArrowDown':
                 relZoom(-1);
+                break;
+            case 'b':
+                toggleBorder();
                 break;
         }
     });
@@ -123,6 +129,15 @@ function moveWindow() {
     animationId = requestAnimationFrame(moveWindow);
 }
 
+function toggleBorder(){
+    border = !border;
+    if(border){
+        document.body.classList.add('border');
+    } else {
+        document.body.classList.remove('border');
+    }
+}
+
 
 function loadFile(pathname){
     datauri.encode(pathname, (err, data) => {
@@ -136,6 +151,7 @@ function loadFile(pathname){
 
 function loadData(data){
     let mime;
+    curEl.removeAttribute('src');
     if(data[5] === 'i'){
         mime = 'image';
         
@@ -159,8 +175,6 @@ function loadData(data){
     } else {
         mime = undefined;
     }
-    zoom = 1;
-    zoomStage = 0;
 }
 
 function loadDone(){
@@ -171,6 +185,9 @@ function loadDone(){
         width = curEl.videoWidth;
         height = curEl.videoHeight;
     }
+    zoom = 1;
+    zoomStage = 0;
+    relZoom(0);
     ipcRenderer.send('resize', width, height, true);
 }
 
@@ -252,24 +269,30 @@ function relZoom(dir){
     if(shift){
         if(dir < 0){
             zoomStage -= 8;
-        } else {
+        } else if(dir > 0) {
             zoomStage += 8;
         }
     } else {
         if(dir < 0){
             zoomStage--;
-        } else {
+        } else if(dir > 0) {
             zoomStage++;
         }
     }
     
-    
+    updateZoom();
+}
+
+function updateZoom(){
     if(zoomStage >= 0){
         zoom = zoomStage + 1;
-        curEl.classList.add('pixel');
     } else {
         //zoomStage = Math.max(-10, zoomStage);
         zoom = 1 / (Math.abs(zoomStage) + 1);
+    }
+    if(zoom > 1){
+        curEl.classList.add('pixel');
+    } else {
         curEl.classList.remove('pixel');
     }
     
@@ -284,7 +307,6 @@ function relZoom(dir){
     curEl.setAttribute('width', newWidth);
     ignoreResize.push(true);
     ipcRenderer.send('resize', Math.round(newWidth), Math.round(newHeight), true);
-    console.log(zoom);
 }
 
 window.addEventListener('resize', onResize);

@@ -20,7 +20,7 @@ function createWindow(){
         minHeight,
         transparent: true,
         resizable: true,
-        //icon: __dirname + '/icon.png',
+        icon: __dirname + '/icon.png',
         webPreferences: {
             nodeIntegration: true,
             zoomFactor: 1.0
