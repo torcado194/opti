@@ -4,7 +4,9 @@ let canDrag = false,
     imgEl,
     width = 0,
     height = 0,
-    zoom = 1;
+    zoom = 1,
+    ignoreResize = [],
+    filePath;
 
 function init(){
     console.log('ready');
@@ -48,7 +50,6 @@ window.addEventListener('mousedown', onMouseDown);
 window.addEventListener('mouseup', onMouseUp);
 
 function onMouseDown(e) {
-    console.log(e);
     mouseX = e.clientX;  
     mouseY = e.clientY;
     
@@ -62,7 +63,6 @@ function onMouseDown(e) {
 }
 
 function onMouseUp(e) {
-    console.log(e);
     ipcRenderer.send('windowMoved');
     document.removeEventListener('mouseup', onMouseUp)
     cancelAnimationFrame(animationId);
@@ -99,12 +99,17 @@ function drag(e){
 }
 
 function drop(e){
+    console.log(e);
     e.preventDefault();
     e.stopPropagation();
+    
     const file = e.dataTransfer.files[0];
     if(!file || !file.name){
         return console.warn('no file');
     }
+    
+    filePath = file.path;
+    
     const reader = new FileReader();
     reader.onload = function(e){
         load(e.target.result);
@@ -115,7 +120,11 @@ function drop(e){
 window.addEventListener('mousewheel', onMouseWheel);
 
 function onMouseWheel(e){
-    console.log(e);
+    if(zoom === 0){
+        let scale = Math.min(imgEl.clientWidth, imgEl.clientHeight) / Math.min(width, height);
+        console.log(scale);
+        zoom = Math.round(scale);
+    }
     if(e.deltaY > 0){
         zoom = Math.max(1, zoom - 1);
     } else {
@@ -123,11 +132,17 @@ function onMouseWheel(e){
     }
     imgEl.setAttribute('width', width * zoom);
     imgEl.classList.add('pixel');
-    ipcRenderer.send('resize', width * zoom, height * zoom);
+    ignoreResize.push(true);
+    ipcRenderer.send('resize', width * zoom, height * zoom, true);
 }
 
 window.addEventListener('resize', onResize);
 
 function onResize(e){
+    if(ignoreResize.length > 0){
+        ignoreResize.pop();
+        return;
+    }
+    zoom = 0;
     imgEl.classList.remove('pixel');
 }

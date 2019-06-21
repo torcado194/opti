@@ -34,8 +34,17 @@ function createWindow(){
 app.on('ready', createWindow);
 
 
-ipcMain.on('resize', (e, w, h) => {
+ipcMain.on('resize', (e, w, h, center) => {
+    let [oldW, oldH] = win.getSize(),
+        [oldX, oldY] = win.getPosition();
     win.setSize(w, h);
+    if(center){
+        let {width, height} = screen.getPrimaryDisplay().workAreaSize;
+        w = Math.min(w, width + 20);
+        h = Math.min(h, height + 60);
+        console.log(w, oldW, h, oldH);
+        win.setPosition(oldX + Math.floor((oldW - w) / 2), oldY + Math.floor((oldH - h) / 2));
+    }
 });
 
 ipcMain.on('windowMoving', (e, {mouseX, mouseY}) => {
