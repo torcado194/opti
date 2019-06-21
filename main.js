@@ -6,8 +6,11 @@ let screen;
 require('electron-reload')(__dirname);
 
 let win,
-    minWidth = 40,
-    minHeight = 40;
+    minWidth = 120,
+    minHeight = 120;
+
+process.env.MIN_WIDTH = minWidth;
+process.env.MIN_HEIGHT = minHeight;
 
 function createWindow(){
     win = new BrowserWindow({

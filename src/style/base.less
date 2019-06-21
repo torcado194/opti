@@ -9,7 +9,7 @@ html, body {
     overflow: hidden;
 }
 
-body {
+.border {
     border: 1px solid #03a9f4;
 }
 
@@ -34,11 +34,15 @@ img, video {
     top: 0;
     bottom: 0;
     margin: auto;
+    
+}
+
+.pixel {
+    image-rendering: pixelated;
+}
+
+.contain {
     width: inherit;
     height: inherit;
     object-fit: contain;
-}
-
-.pixel{
-    image-rendering: pixelated;
 }

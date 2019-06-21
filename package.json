@@ -13,6 +13,7 @@
     "electron-reload": "^1.4.0"
   },
   "dependencies": {
+    "datauri": "^2.0.0",
     "ejs": "^2.6.2"
   }
 }

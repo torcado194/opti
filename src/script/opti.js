@@ -1,4 +1,9 @@
 const {ipcRenderer} = require('electron');
+const fs = require('fs');
+const path = require('path');
+const DataURI = require('datauri');
+const datauri = new DataURI();
+
 
 let canDrag = false,
     imgEl,
@@ -9,7 +14,12 @@ let canDrag = false,
     zoomStage = 0,
     zoom = 1,
     ignoreResize = [],
-    filePath;
+    filepath,
+    filename,
+    localFiles = [],
+    fileIndex = 0,
+    shift,
+    ctrl;
 
 function init(){
     console.log('ready');
@@ -21,18 +31,48 @@ function init(){
     
     console.log(screen);
     
-    /*window.addEventListener('keydown', e => {
+    window.addEventListener('keydown', e => {
         if(e.key === 'Shift'){
-            canDrag = true;
-            document.getElementById('drag').style.display = 'block';
+        }
+        if(e.key === 'Control'){
+            //document.body.classList.add('border');
+        }
+        switch(e.key){
+            case 'Shift':
+                shift = true;
+                break;
+            case 'Control':
+                ctrl = true;
+                break;
+            case 'ArrowRight':
+                nextFile();
+                break;
+            case 'ArrowLeft':
+                prevFile();
+                break;
+            case 'ArrowUp':
+                relZoom(1);
+                break;
+            case 'ArrowDown':
+                relZoom(-1);
+                break;
         }
     });
     window.addEventListener('keyup', e => {
         if(e.key === 'Shift'){
-            canDrag = false;
-            document.getElementById('drag').style.display = 'none';
         }
-    });*/
+        if(e.key === 'Control'){
+            //document.body.classList.remove('border');
+        }
+        switch(e.key){
+            case 'Shift':
+                shift = false;
+                break;
+            case 'Control':
+                ctrl = false;
+                break;
+        }
+    });
     
     /*window.addEventListener('mouseover', e => {
         console.log('s');
@@ -83,8 +123,17 @@ function moveWindow() {
 }
 
 
+function loadFile(pathname){
+    datauri.encode(pathname, (err, data) => {
+        if(err){
+            return console.error(err);
+        }
+        loadData(data);
+        //loadDirectory(pathname);
+    });
+}
 
-function load(data){
+function loadData(data){
     let mime;
     if(data[5] === 'i'){
         mime = 'image';
@@ -147,15 +196,50 @@ function drop(e){
     
     const reader = new FileReader();
     reader.onload = function(e){
-        load(e.target.result);
+        loadData(e.target.result);
     }
     reader.readAsDataURL(file);
+    
+    loadDirectory(filePath);
 }
 
-window.addEventListener('mousewheel', onMouseWheel);
+function loadDirectory(dir, name){
+    fs.lstat(dir, (err, stats) => {
+        if(err){
+            return console.error(err);
+        }
+        if(!stats.isDirectory()){
+            filename = name = path.basename(dir);
+            filepath = dir = path.resolve(dir, '..');
+        }
+        fs.readdir(dir, (err, list) => {
+            if(err){
+                return console.error(err);
+            }
+            localFiles = list;
+            fileIndex = list.indexOf(name);
+            console.log(list, name, fileIndex);
+        });
+    })
+}
 
-function onMouseWheel(e){
-    if(zoom < 1 || true){
+function nextFile(){
+    fileIndex = (fileIndex + 1) % localFiles.length;
+    loadFile(path.resolve(filepath, localFiles[fileIndex]));
+}
+
+function prevFile(){
+    fileIndex = (fileIndex - 1) % localFiles.length;
+    loadFile(path.resolve(filepath, localFiles[fileIndex]));
+}
+
+window.addEventListener('mousewheel', e => {
+    relZoom(-e.deltaY);
+});
+
+function relZoom(dir){
+    console.log(zoom);
+    if(zoom === null){
         let scale = Math.min(curEl.clientWidth, curEl.clientHeight) / Math.min(width, height);
         console.log(scale);
         if(scale >= 1){
@@ -164,25 +248,42 @@ function onMouseWheel(e){
             zoomStage = 1 - Math.round(1/scale);
         }
     }
-    if(e.deltaY > 0){
-        zoomStage--;
+    if(shift){
+        if(dir < 0){
+            zoomStage -= 8;
+        } else {
+            zoomStage += 8;
+        }
     } else {
-        zoomStage++;
+        if(dir < 0){
+            zoomStage--;
+        } else {
+            zoomStage++;
+        }
     }
+    
     
     if(zoomStage >= 0){
         zoom = zoomStage + 1;
         curEl.classList.add('pixel');
     } else {
+        //zoomStage = Math.max(-10, zoomStage);
         zoom = 1 / (Math.abs(zoomStage) + 1);
         curEl.classList.remove('pixel');
     }
     
     let newWidth = Math.min(screen.availWidth, width * zoom);
     let newHeight = Math.min(screen.availHeight, height * zoom);
+    if(newWidth >= process.env.MIN_WIDTH || newHeight >= process.env.MIN_HEIGHT){
+        curEl.classList.add('contain');
+    } else {
+        curEl.classList.remove('contain');
+    }
+    
     curEl.setAttribute('width', newWidth);
     ignoreResize.push(true);
     ipcRenderer.send('resize', Math.round(newWidth), Math.round(newHeight), true);
+    console.log(zoom);
 }
 
 window.addEventListener('resize', onResize);
@@ -192,6 +293,6 @@ function onResize(e){
         ignoreResize.pop();
         return;
     }
-    zoom = 0;
+    zoom = null;
     curEl.classList.remove('pixel');
 }
