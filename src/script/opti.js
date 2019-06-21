@@ -32,7 +32,8 @@ let canDrag = false,
     panY = 0,
     panStartX = 0,
     panStartY = 0,
-    border = false;
+    border = false,
+    pinned = false;
 
 function init(){
     console.log('ready');
@@ -84,6 +85,9 @@ window.addEventListener('keydown', e => {
             break;
         case 'b':
             toggleBorder();
+            break;
+        case 'a':
+            togglePinned();
             break;
     }
 });
@@ -137,7 +141,6 @@ function moveWindow() {
 }
 
 function onMouseMove(e) {
-    console.log(e);
     mouseX = e.clientX;
     mouseY = e.clientY;
     if(!ctrl){
@@ -162,6 +165,11 @@ function toggleBorder(){
     } else {
         document.body.classList.remove('border');
     }
+}
+
+function togglePinned(){
+    ipcRenderer.send('setAlwaysOnTop', pinned = !pinned);
+    console.log(pinned);
 }
 
 

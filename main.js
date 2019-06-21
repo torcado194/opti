@@ -53,10 +53,15 @@ ipcMain.on('resize', (e, w, h, center) => {
 });
 
 ipcMain.on('windowMoving', (e, startX, startY) => {
-    const { x, y } = electron.screen.getCursorScreenPoint()
-    win.setPosition(x - startX, y - startY)
+    const { x, y } = electron.screen.getCursorScreenPoint();
+    win.setPosition(x - startX, y - startY);
 });
 
 ipcMain.on('windowMoved', () => {
-// Do somehting when dragging stop
+    
+});
+
+ipcMain.on('setAlwaysOnTop', (e, state) => {
+    console.log({state});
+    win.setAlwaysOnTop(state);
 });
