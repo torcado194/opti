@@ -28,10 +28,13 @@ let canDrag = false,
     mouseX,
     mouseY,
     mouseDown = false,
+    mouseRightDown = false,
     panX = 0,
     panY = 0,
     panStartX = 0,
     panStartY = 0,
+    angle = 0,
+    startAngle = 0,
     border = false,
     pinned = false;
 
@@ -120,22 +123,31 @@ window.addEventListener('mouseup', onMouseUp);
 window.addEventListener('mousemove', onMouseMove);
 
 function onMouseDown(e) {
-    mouseDown = true;
+    if(e.button === 0){
+        mouseDown = true;
+    } else if(e.button === 2){
+        mouseRightDown = true;
+    }
     mouseStartX = e.clientX;  
     mouseStartY = e.clientY;
     panStartX = panX;
     panStartY = panY;
+    startAngle = angle;
     
     e.stopPropagation();
     e.preventDefault();
     
-    if(!ctrl && !animationId){
+    if(!ctrl && !animationId && mouseDown){
         animationId = requestAnimationFrame(moveWindow);
     }
 }
 
 function onMouseUp(e) {
-    mouseDown = false;
+    if(e.button === 0){
+        mouseDown = false;
+    } else if(e.button === 2){
+        mouseRightDown = false;
+    }
     ipcRenderer.send('windowMoved');
     cancelAnimationFrame(animationId);
     animationId = null;
@@ -151,11 +163,11 @@ function moveWindow() {
 function onMouseMove(e) {
     mouseX = e.clientX;
     mouseY = e.clientY;
-    if(!ctrl){
-        return;
-    }
-    if(mouseDown){
+    if(ctrl && mouseDown){
         pan(mouseX - mouseStartX, mouseY - mouseStartY);
+    }
+    if(mouseRightDown){
+        rotateCoords(mouseX, mouseY, mouseStartX, mouseStartY);
     }
 }
 
@@ -164,6 +176,13 @@ function pan(x, y){
     panY = panStartY + y;
     containerEl.style.left = `${panX}px`;
     containerEl.style.top = `${panY}px`;
+}
+
+function rotateCoords(x, y, origX, origY){
+    let origAngle = mod((180 / Math.PI) * Math.atan2(origY - window.innerHeight / 2, origX - window.innerWidth / 2), 360),
+        curAngle = mod((180 / Math.PI) * Math.atan2(y - window.innerHeight / 2, x - window.innerWidth / 2), 360);
+    angle = mod((startAngle + curAngle - origAngle), 360);
+    curEl.style.transform = `translate(-50%, -50%) rotate(${angle}deg)`;
 }
 
 function toggleBorder(){
