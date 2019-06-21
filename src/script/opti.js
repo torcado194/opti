@@ -4,6 +4,7 @@ const path = require('path');
 const DataURI = require('datauri');
 const datauri = new DataURI();
 
+const mod = (x, n) => (x % n + n) % n;
 
 let canDrag = false,
     imgEl,
@@ -224,12 +225,12 @@ function loadDirectory(dir, name){
 }
 
 function nextFile(){
-    fileIndex = (fileIndex + 1) % localFiles.length;
+    fileIndex = mod((fileIndex + 1), localFiles.length);
     loadFile(path.resolve(filepath, localFiles[fileIndex]));
 }
 
 function prevFile(){
-    fileIndex = (fileIndex - 1) % localFiles.length;
+    fileIndex = mod((fileIndex - 1), localFiles.length);
     loadFile(path.resolve(filepath, localFiles[fileIndex]));
 }
 
