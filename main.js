@@ -11,6 +11,8 @@ function createWindow(){
     win = new BrowserWindow({
         width: 800,
         height: 600,
+        minWidth: 40,
+        minHeight: 40,
         transparent: true,
         resizable: true,
         //icon: __dirname + '/icon.png',

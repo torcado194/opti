@@ -1,6 +1,10 @@
 const {ipcRenderer} = require('electron');
 
-let canDrag = false;
+let canDrag = false,
+    imgEl,
+    width = 0,
+    height = 0,
+    zoom = 1;
 
 function init(){
     console.log('ready');
@@ -44,17 +48,25 @@ window.addEventListener('mousedown', onMouseDown);
 window.addEventListener('mouseup', onMouseUp);
 
 function onMouseDown(e) {
+    console.log(e);
     mouseX = e.clientX;  
     mouseY = e.clientY;
     
+    e.stopPropagation();
+    e.preventDefault();
+    
     document.addEventListener('mouseup', onMouseUp)
-    requestAnimationFrame(moveWindow);
+    if(!animationId){
+        animationId = requestAnimationFrame(moveWindow);
+    }
 }
 
 function onMouseUp(e) {
+    console.log(e);
     ipcRenderer.send('windowMoved');
     document.removeEventListener('mouseup', onMouseUp)
-    cancelAnimationFrame(animationId)
+    cancelAnimationFrame(animationId);
+    animationId = null;
 }
 
 function moveWindow() {
@@ -65,14 +77,22 @@ function moveWindow() {
 
 
 function load(data){
-    document.getElementById('image').setAttribute('src', data);
+    imgEl = document.getElementById('image');
+    imgEl.setAttribute('src', data);
+    imgEl.onload = loadDone;
+    zoom = 1;
+}
+
+function loadDone(){
+    width = imgEl.naturalWidth;
+    height = imgEl.naturalHeight;
+    ipcRenderer.send('resize', width, height);
 }
 
 window.addEventListener('dragover', drag);
 window.addEventListener('drop', drop);
 
 function drag(e){
-    console.log(e);
     e.stopPropagation();
     e.preventDefault();
     e.dataTransfer.dropEffect = 'link';
@@ -90,4 +110,24 @@ function drop(e){
         load(e.target.result);
     }
     reader.readAsDataURL(file);
+}
+
+window.addEventListener('mousewheel', onMouseWheel);
+
+function onMouseWheel(e){
+    console.log(e);
+    if(e.deltaY > 0){
+        zoom = Math.max(1, zoom - 1);
+    } else {
+        zoom++;
+    }
+    imgEl.setAttribute('width', width * zoom);
+    imgEl.classList.add('pixel');
+    ipcRenderer.send('resize', width * zoom, height * zoom);
+}
+
+window.addEventListener('resize', onResize);
+
+function onResize(e){
+    imgEl.classList.remove('pixel');
 }
