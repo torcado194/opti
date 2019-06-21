@@ -3,7 +3,9 @@ const {app, BrowserWindow, ipcMain} = electron;
 
 let screen;
 
-require('electron-reload')(__dirname);
+if(process.env.NODE_ENV === 'development'){
+    require('electron-reload')(__dirname);
+}
 
 let win,
     minWidth = 120,
@@ -19,8 +21,9 @@ function createWindow(){
         minWidth,
         minHeight,
         transparent: true,
+        backgroundColor: '#00000000',
         resizable: true,
-        icon: __dirname + '/icon.png',
+        icon: __dirname + '/icon.ico',
         webPreferences: {
             nodeIntegration: true,
             zoomFactor: 1.0
@@ -30,6 +33,9 @@ function createWindow(){
         autoHideMenuBar: true
     });
     win.loadFile('src/index.html');
+    win.webContents.on('did-finish-load', () => {
+        win.webContents.send('open', process.argv[1]);
+    });
     win.on('closed', () => {
         win = null
     });

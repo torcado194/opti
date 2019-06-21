@@ -35,6 +35,14 @@ let canDrag = false,
     border = false,
     pinned = false;
 
+
+ipcRenderer.on('open', (event, p) => {
+    console.log(p);
+    if(p && p !== '.'){
+        loadFile(p);
+    }
+});
+
 function init(){
     console.log('ready');
     
