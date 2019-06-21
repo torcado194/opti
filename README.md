@@ -1,3 +1,3 @@
-# <img src="https://raw.githubusercontent.com/torcado194/opti/master/icon_small-dark.png" alt="icon"/>pti
+# <img src="https://raw.githubusercontent.com/torcado194/opti/master/icon-dark.png" alt="icon" width="48"/> opti
 
 a simple, transparent media viewer
