@@ -52,9 +52,9 @@ ipcMain.on('resize', (e, w, h, center) => {
     }
 });
 
-ipcMain.on('windowMoving', (e, {mouseX, mouseY}) => {
+ipcMain.on('windowMoving', (e, startX, startY) => {
     const { x, y } = electron.screen.getCursorScreenPoint()
-    win.setPosition(x - mouseX, y - mouseY)
+    win.setPosition(x - startX, y - startY)
 });
 
 ipcMain.on('windowMoved', () => {

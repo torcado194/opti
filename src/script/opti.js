@@ -10,6 +10,7 @@ let canDrag = false,
     imgEl,
     vidEl,
     curEl,
+    containerEl,
     width = 0,
     height = 0,
     zoomStage = 0,
@@ -21,6 +22,16 @@ let canDrag = false,
     fileIndex = 0,
     shift,
     ctrl,
+    animationId,
+    mouseStartX,
+    mouseStartY,
+    mouseX,
+    mouseY,
+    mouseDown = false,
+    panX = 0,
+    panY = 0,
+    panStartX = 0,
+    panStartY = 0,
     border = false;
 
 function init(){
@@ -28,58 +39,12 @@ function init(){
     
     ipcRenderer.send('resize', 500, 500);
     
-    curEl = imgEl = document.getElementById('image');
+    imgEl = document.getElementById('image');
     vidEl = document.getElementById('video');
     
-    console.log(screen);
+    containerEl = document.getElementById('container');
     
     border = document.body.classList.contains('border');
-    
-    window.addEventListener('keydown', e => {
-        if(e.key === 'Shift'){
-        }
-        if(e.key === 'Control'){
-            //document.body.classList.add('border');
-        }
-        switch(e.key){
-            case 'Shift':
-                shift = true;
-                break;
-            case 'Control':
-                ctrl = true;
-                break;
-            case 'ArrowRight':
-                nextFile();
-                break;
-            case 'ArrowLeft':
-                prevFile();
-                break;
-            case 'ArrowUp':
-                relZoom(1);
-                break;
-            case 'ArrowDown':
-                relZoom(-1);
-                break;
-            case 'b':
-                toggleBorder();
-                break;
-        }
-    });
-    window.addEventListener('keyup', e => {
-        if(e.key === 'Shift'){
-        }
-        if(e.key === 'Control'){
-            //document.body.classList.remove('border');
-        }
-        switch(e.key){
-            case 'Shift':
-                shift = false;
-                break;
-            case 'Control':
-                ctrl = false;
-                break;
-        }
-    });
     
     /*window.addEventListener('mouseover', e => {
         console.log('s');
@@ -97,36 +62,97 @@ function init(){
 window.onload = init;
 
 
-let animationId;
-let mouseX;
-let mouseY;
+window.addEventListener('keydown', e => {
+    switch(e.key){
+        case 'Shift':
+            shift = true;
+            break;
+        case 'Control':
+            ctrl = true;
+            break;
+        case 'ArrowRight':
+            nextFile();
+            break;
+        case 'ArrowLeft':
+            prevFile();
+            break;
+        case 'ArrowUp':
+            relZoom(1);
+            break;
+        case 'ArrowDown':
+            relZoom(-1);
+            break;
+        case 'b':
+            toggleBorder();
+            break;
+    }
+});
+window.addEventListener('keyup', e => {
+    if(e.key === 'Shift'){
+    }
+    if(e.key === 'Control'){
+        //document.body.classList.remove('border');
+    }
+    switch(e.key){
+        case 'Shift':
+            shift = false;
+            break;
+        case 'Control':
+            ctrl = false;
+            break;
+    }
+});
 
 window.addEventListener('mousedown', onMouseDown);
 window.addEventListener('mouseup', onMouseUp);
+window.addEventListener('mousemove', onMouseMove);
 
 function onMouseDown(e) {
-    mouseX = e.clientX;  
-    mouseY = e.clientY;
+    mouseDown = true;
+    mouseStartX = e.clientX;  
+    mouseStartY = e.clientY;
+    panStartX = panX;
+    panStartY = panY;
     
     e.stopPropagation();
     e.preventDefault();
     
-    document.addEventListener('mouseup', onMouseUp)
-    if(!animationId){
+    if(!ctrl && !animationId){
         animationId = requestAnimationFrame(moveWindow);
     }
 }
 
 function onMouseUp(e) {
+    mouseDown = false;
     ipcRenderer.send('windowMoved');
-    document.removeEventListener('mouseup', onMouseUp)
     cancelAnimationFrame(animationId);
     animationId = null;
 }
 
 function moveWindow() {
-    ipcRenderer.send('windowMoving', { mouseX, mouseY });
-    animationId = requestAnimationFrame(moveWindow);
+    if(!ctrl){
+        ipcRenderer.send('windowMoving', mouseStartX, mouseStartY);
+        animationId = requestAnimationFrame(moveWindow);
+    }
+}
+
+function onMouseMove(e) {
+    console.log(e);
+    mouseX = e.clientX;
+    mouseY = e.clientY;
+    if(!ctrl){
+        return;
+    }
+    if(mouseDown){
+        pan(mouseX - mouseStartX, mouseY - mouseStartY);
+    }
+}
+
+function pan(x, y){
+    panX = panStartX + x;
+    panY = panStartY + y;
+    containerEl.style.left = `${panX}px`;
+    containerEl.style.top = `${panY}px`;
 }
 
 function toggleBorder(){
@@ -151,11 +177,11 @@ function loadFile(pathname){
 
 function loadData(data){
     let mime;
-    curEl.removeAttribute('src');
+    curEl && curEl.removeAttribute('src');
     if(data[5] === 'i'){
         mime = 'image';
         
-        if(curEl !== imgEl){
+        if(curEl && curEl !== imgEl){
             curEl.removeAttribute('src');
         }
         
@@ -165,7 +191,7 @@ function loadData(data){
     } else if(data[5] === 'v'){
         mime = 'video';
         
-        if(curEl !== imgEl){
+        if(curEl && curEl !== imgEl){
             curEl.removeAttribute('src');
         }
         
@@ -201,7 +227,6 @@ function drag(e){
 }
 
 function drop(e){
-    console.log(e);
     e.preventDefault();
     e.stopPropagation();
     
@@ -256,6 +281,9 @@ window.addEventListener('mousewheel', e => {
 });
 
 function relZoom(dir){
+    if(!curEl){
+        return;
+    }
     console.log(zoom);
     if(zoom === null){
         let scale = Math.min(curEl.clientWidth, curEl.clientHeight) / Math.min(width, height);
@@ -284,6 +312,9 @@ function relZoom(dir){
 }
 
 function updateZoom(){
+    if(!curEl){
+        return;
+    }
     if(zoomStage >= 0){
         zoom = zoomStage + 1;
     } else {
@@ -304,9 +335,15 @@ function updateZoom(){
         curEl.classList.remove('contain');
     }
     
-    curEl.setAttribute('width', newWidth);
-    ignoreResize.push(true);
-    ipcRenderer.send('resize', Math.round(newWidth), Math.round(newHeight), true);
+    curEl.setAttribute('width', width * zoom);
+    if(ctrl || width * zoom > newWidth || height * zoom > newHeight){
+        curEl.classList.remove('contain');
+    }
+    if(!ctrl){
+        ignoreResize.push(true);
+        ipcRenderer.send('resize', Math.round(newWidth), Math.round(newHeight), true);
+        pan(panX = panStartX = 0, panY = panStartY = 0);
+    }
 }
 
 window.addEventListener('resize', onResize);
