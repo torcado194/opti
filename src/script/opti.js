@@ -73,7 +73,6 @@ function init(){
     vidEl.addEventListener('play', e => {
         if(dragging || wasDragging) {
             wasDragging = false;
-            console.log('should pause')
             vidEl.pause();
         }
     });
@@ -81,7 +80,6 @@ function init(){
     vidEl.addEventListener('pause', e => {
         if(dragging || wasDragging) {
             wasDragging = false;
-            console.log('should play')
             vidEl.play();
         }
     });
@@ -167,7 +165,6 @@ function onMouseUp(e) {
 }
 
 function moveWindow() {
-    console.log(mouseX, mouseStartX);
     if(!ctrl){
         ipcRenderer.send('windowMoving', mouseStartX, mouseStartY);
         animationId = requestAnimationFrame(moveWindow);
@@ -206,7 +203,6 @@ function toggleBorder(){
 
 function togglePinned(){
     ipcRenderer.send('setAlwaysOnTop', pinned = !pinned);
-    console.log(pinned);
 }
 
 
@@ -306,7 +302,7 @@ function loadDirectory(dir, name){
             }
             localFiles = list;
             fileIndex = list.indexOf(name);
-            console.log(list, name, fileIndex);
+            //console.log(list, name, fileIndex);
         });
     })
 }
@@ -329,10 +325,8 @@ function relZoom(dir){
     if(!curEl){
         return;
     }
-    console.log(zoom);
     if(zoom === null){
         let scale = Math.min(curEl.clientWidth, curEl.clientHeight) / Math.min(width, height);
-        console.log(scale);
         if(scale >= 1){
             zoomStage = Math.round(scale) - 1;
         } else {
