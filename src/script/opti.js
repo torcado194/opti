@@ -11,6 +11,7 @@ let canDrag = false,
     vidEl,
     curEl,
     containerEl,
+    clipEl,
     width = 0,
     height = 0,
     zoomStage = 0,
@@ -35,6 +36,8 @@ let canDrag = false,
     panStartY = 0,
     angle = 0,
     startAngle = 0,
+    clipAngle = 0,
+    clipStartAngle = 0,
     border = false,
     pinned = false;
 
@@ -46,6 +49,10 @@ ipcRenderer.on('open', (event, p) => {
     }
 });
 
+window.addEventListener('beforeunload', e => {
+    ipcRenderer.send('setClickthrough', false);
+});
+
 function init(){
     console.log('ready');
     
@@ -55,9 +62,18 @@ function init(){
     vidEl = document.getElementById('video');
     
     containerEl = document.getElementById('container');
+    clipEl = document.getElementById('clip');
     
     border = document.body.classList.contains('border');
     
+    clipEl.addEventListener('mouseenter', e => {
+        onMouseEnter();
+        ipcRenderer.send('setClickthrough', false);
+    });
+    clipEl.addEventListener('mouseleave', e => {
+        onMouseEnter();
+        ipcRenderer.send('setClickthrough', true);
+    });
     /*window.addEventListener('mouseover', e => {
         console.log('s');
         document.getElementById('drag').style.display = 'block';
@@ -121,6 +137,8 @@ window.addEventListener('keyup', e => {
 window.addEventListener('mousedown', onMouseDown);
 window.addEventListener('mouseup', onMouseUp);
 window.addEventListener('mousemove', onMouseMove);
+window.document.addEventListener('mouseenter', onMouseEnter);
+window.document.addEventListener('mouseleave', onMouseLeave);
 
 function onMouseDown(e) {
     if(e.button === 0){
@@ -133,6 +151,7 @@ function onMouseDown(e) {
     panStartX = panX;
     panStartY = panY;
     startAngle = angle;
+    clipStartAngle = clipAngle;
     
     e.stopPropagation();
     e.preventDefault();
@@ -148,9 +167,39 @@ function onMouseUp(e) {
     } else if(e.button === 2){
         mouseRightDown = false;
     }
+    if(mouseX < 0 || mouseX > window.outerWidth || mouseY < 0 || mouseY > window.outerHeight){
+        onMouseLeave();
+    }
     ipcRenderer.send('windowMoved');
     cancelAnimationFrame(animationId);
     animationId = null;
+}
+
+function onMouseMove(e) {
+    mouseX = e.clientX;
+    mouseY = e.clientY;
+    if(ctrl){
+        if(mouseDown){
+            pan(mouseX - mouseStartX, mouseY - mouseStartY);
+        }
+        if(mouseRightDown){
+            rotateCoords(mouseX, mouseY, mouseStartX, mouseStartY);
+        }
+    } else {
+        if(mouseRightDown){
+            rotateClipCoords(mouseX, mouseY, mouseStartX, mouseStartY);
+        }
+    }
+}
+
+function onMouseEnter(e){
+    //resizeMax();
+}
+
+function onMouseLeave(e){
+    /*if(!mouseDown && !mouseRightDown){
+        resetSize();
+    }*/
 }
 
 function moveWindow() {
@@ -160,29 +209,60 @@ function moveWindow() {
     }
 }
 
-function onMouseMove(e) {
-    mouseX = e.clientX;
-    mouseY = e.clientY;
-    if(ctrl && mouseDown){
-        pan(mouseX - mouseStartX, mouseY - mouseStartY);
-    }
-    if(mouseRightDown){
-        rotateCoords(mouseX, mouseY, mouseStartX, mouseStartY);
-    }
-}
 
 function pan(x, y){
-    panX = panStartX + x;
-    panY = panStartY + y;
+    
+    let a = Math.atan2(y, x),
+        m = Math.hypot(x, y);
+    a -= clipAngle * Math.PI / 180;
+    panX = panStartX + m * Math.cos(a);
+    panY = panStartY + m * Math.sin(a);
+    
     containerEl.style.left = `${panX}px`;
     containerEl.style.top = `${panY}px`;
 }
 
+function rotateClipCoords(x, y, origX, origY){
+    let centerX = window.innerHeight / 2,
+        centerY = window.innerWidth / 2;
+    let origAngle = mod((180 / Math.PI) * Math.atan2(origY - centerY, origX - centerX), 360),
+        curAngle = mod((180 / Math.PI) * Math.atan2(y - centerY, x - centerX), 360);
+    rotateClip(curAngle - origAngle);
+}
+
+function rotateClip(a){
+    clipAngle = mod((clipStartAngle + a), 360);
+    clipEl.style.transform = `translate(-50%, -50%) rotate(${clipAngle}deg)`;
+    
+    //resetSize();
+    //resetClip();
+}
+
 function rotateCoords(x, y, origX, origY){
-    let origAngle = mod((180 / Math.PI) * Math.atan2(origY - window.innerHeight / 2, origX - window.innerWidth / 2), 360),
-        curAngle = mod((180 / Math.PI) * Math.atan2(y - window.innerHeight / 2, x - window.innerWidth / 2), 360);
-    angle = mod((startAngle + curAngle - origAngle), 360);
-    curEl.style.transform = `translate(-50%, -50%) rotate(${angle}deg)`;
+    let bounds = curEl.getBoundingClientRect(),
+        centerX = bounds.x + bounds.width / 2,
+        centerY = bounds.y + bounds.height / 2;
+    let origAngle = mod((180 / Math.PI) * Math.atan2(origY - centerY, origX - centerX), 360),
+        curAngle = mod((180 / Math.PI) * Math.atan2(y - centerY, x - centerX), 360);
+    rotate(curAngle - origAngle);
+}
+
+function rotate(a){
+    angle = mod((startAngle + a), 360);
+    containerEl.style.transform = `rotate(${angle}deg)`;
+    
+    //resetSize();
+    //resetClip();
+}
+
+function resetClip(){
+    //let {width, height} = containerEl.getBoundingClientRect();
+    
+    let width = curEl.clientWidth,
+        height = curEl.clientHeight;
+    
+    clipEl.style.width = width + 'px';
+    clipEl.style.height = height + 'px';
 }
 
 function toggleBorder(){
@@ -376,10 +456,53 @@ function updateZoom(){
     }
     if(!ctrl){
         ignoreResize.push(true);
-        ipcRenderer.send('resize', Math.round(newWidth), Math.round(newHeight), true);
+        //resize(newWidth, newHeight);
+        resizeMax(newWidth, newHeight);
         pan(panX = panStartX = 0, panY = panStartY = 0);
     }
 }
+
+function resize(width, height){
+    width = Math.min(screen.availWidth, width);
+    height = Math.min(screen.availHeight, height);
+    ipcRenderer.send('resize', Math.round(width), Math.round(height), true);
+}
+
+function resetSize(){
+    if(!curEl){
+        return;
+    }
+    let {width, height} = curEl.getBoundingClientRect();
+    
+    //width = curEl.clientWidth*Math.abs(Math.cos(angle * Math.PI / 180)) + curEl.clientHeight*Math.abs(Math.sin(angle * Math.PI / 180));
+    //height = curEl.clientHeight*Math.abs(Math.cos(angle * Math.PI / 180)) + curEl.clientWidth*Math.abs(Math.sin(angle * Math.PI / 180));
+    
+    width = Math.min(screen.availWidth, width);
+    height = Math.min(screen.availHeight, height);
+    resetClip();
+    ipcRenderer.send('resize', Math.round(width), Math.round(height), true);
+}
+
+function resizeMax(){
+    if(!curEl){
+        return;
+    }
+    let {width, height} = curEl.getBoundingClientRect();
+    
+    //width = curEl.clientWidth*Math.abs(Math.cos(angle * Math.PI / 180)) + curEl.clientHeight*Math.abs(Math.sin(angle * Math.PI / 180));
+    //height = curEl.clientHeight*Math.abs(Math.cos(angle * Math.PI / 180)) + curEl.clientWidth*Math.abs(Math.sin(angle * Math.PI / 180));
+    let a = Math.atan((curEl.clientHeight) / (curEl.clientWidth));
+    
+    width = (curEl.clientWidth)*Math.abs(Math.cos(a)) + (curEl.clientHeight)*Math.abs(Math.sin(a));
+    //height = curEl.clientHeight*Math.abs(Math.cos(a2)) + curEl.clientWidth*Math.abs(Math.sin(a2));
+    height = width;
+    
+    width = Math.min(screen.availWidth, width);
+    height = Math.min(screen.availHeight, height);
+    resetClip();
+    ipcRenderer.send('resize', Math.round(width), Math.round(height), true);
+}
+
 
 window.addEventListener('resize', onResize);
 
@@ -389,5 +512,5 @@ function onResize(e){
         return;
     }
     zoom = null;
-    curEl.classList.remove('pixel');
+    curEl && curEl.classList.remove('pixel');
 }
