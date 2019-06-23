@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const DataURI = require('datauri');
 const datauri = new DataURI();
+const mime = require('mime-types');
 
 const mod = (x, n) => (x % n + n) % n;
 
