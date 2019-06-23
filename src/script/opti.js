@@ -3,11 +3,12 @@ const fs = require('fs');
 const path = require('path');
 const DataURI = require('datauri');
 const datauri = new DataURI();
-const mime = require('mime-types');
 
 const mod = (x, n) => (x % n + n) % n;
 
 let canDrag = false,
+    dragging = false,
+    wasDragging = false,
     imgEl,
     vidEl,
     curEl,
@@ -68,6 +69,22 @@ function init(){
         console.log('l')
         document.getElementById('drag').style.display = 'none';
     });*/
+    
+    vidEl.addEventListener('play', e => {
+        if(dragging || wasDragging) {
+            wasDragging = false;
+            console.log('should pause')
+            vidEl.pause();
+        }
+    });
+    
+    vidEl.addEventListener('pause', e => {
+        if(dragging || wasDragging) {
+            wasDragging = false;
+            console.log('should play')
+            vidEl.play();
+        }
+    });
 }
 window.onload = init;
 
@@ -122,6 +139,7 @@ window.addEventListener('mousemove', onMouseMove);
 
 function onMouseDown(e) {
     mouseDown = true;
+    wasDragging = false;
     mouseStartX = e.clientX;  
     mouseStartY = e.clientY;
     panStartX = panX;
@@ -137,12 +155,19 @@ function onMouseDown(e) {
 
 function onMouseUp(e) {
     mouseDown = false;
+    if(dragging){
+        dragging = false;
+        wasDragging = true;
+        e.stopPropagation();
+        e.preventDefault();
+    }
     ipcRenderer.send('windowMoved');
     cancelAnimationFrame(animationId);
     animationId = null;
 }
 
 function moveWindow() {
+    console.log(mouseX, mouseStartX);
     if(!ctrl){
         ipcRenderer.send('windowMoving', mouseStartX, mouseStartY);
         animationId = requestAnimationFrame(moveWindow);
@@ -152,6 +177,9 @@ function moveWindow() {
 function onMouseMove(e) {
     mouseX = e.clientX;
     mouseY = e.clientY;
+    if(mouseDown && (mouseX !== mouseStartX || mouseY !== mouseStartY)){
+        dragging = true;
+    }
     if(!ctrl){
         return;
     }
