@@ -20,6 +20,12 @@
     "mime-types": "^2.1.24"
   },
   "build": {
+	"directories": {
+		"output": "/dist"
+	},
+	"files": [
+      "!**/_*"
+    ],
     "appId": "com.electron.opti",
     "linux": {
       "target": [
