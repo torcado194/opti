@@ -7,8 +7,6 @@ const datauri = new DataURI();
 const mod = (x, n) => (x % n + n) % n;
 
 let canDrag = false,
-    dragging = false,
-    wasDragging = false,
     imgEl,
     vidEl,
     curEl,
@@ -72,20 +70,6 @@ function init(){
         console.log('l')
         document.getElementById('drag').style.display = 'none';
     });*/
-    
-    vidEl.addEventListener('play', e => {
-        if(dragging || wasDragging) {
-            wasDragging = false;
-            vidEl.pause();
-        }
-    });
-    
-    vidEl.addEventListener('pause', e => {
-        if(dragging || wasDragging) {
-            wasDragging = false;
-            vidEl.play();
-        }
-    });
 }
 window.onload = init;
 
@@ -150,7 +134,6 @@ function onMouseDown(e) {
     } else if(e.button === 2){
         mouseRightDown = true;
     }
-    wasDragging = false;
     mouseStartX = e.clientX;  
     mouseStartY = e.clientY;
     panStartX = panX;
@@ -171,12 +154,6 @@ function onMouseUp(e) {
     } else if(e.button === 2){
         mouseRightDown = false;
     }
-    if(dragging){
-        dragging = false;
-        wasDragging = true;
-        e.stopPropagation();
-        e.preventDefault();
-    }
     ipcRenderer.send('windowMoved');
     cancelAnimationFrame(animationId);
     animationId = null;
@@ -192,12 +169,6 @@ function moveWindow() {
 function onMouseMove(e) {
     mouseX = e.clientX;
     mouseY = e.clientY;
-    if(mouseDown && (mouseX !== mouseStartX || mouseY !== mouseStartY)){
-        dragging = true;
-    }
-    if(!ctrl){
-        return;
-    }
     if(ctrl && mouseDown){
         pan(mouseX - mouseStartX, mouseY - mouseStartY);
     }

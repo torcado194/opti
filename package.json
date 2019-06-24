@@ -1,11 +1,11 @@
 {
   "name": "opti",
-  "version": "1.0.2",
+  "version": "1.1.0",
   "description": "simple image viewer",
   "main": "main.js",
   "scripts": {
     "start": "set NODE_ENV=development&&electron .",
-	"pack": "build --dir",
+    "pack": "build --dir",
     "dist": "build"
   },
   "author": "torcado",
@@ -16,9 +16,16 @@
     "electron-reload": "^1.4.0"
   },
   "dependencies": {
-    "datauri": "^2.0.0"
+    "datauri": "git+https://git@github.com/torcado194/datauri.git",
+    "mime-types": "^2.1.24"
   },
   "build": {
+	"directories": {
+		"output": "/dist"
+	},
+	"files": [
+      "!**/_*"
+    ],
     "appId": "com.electron.opti",
     "linux": {
       "target": [

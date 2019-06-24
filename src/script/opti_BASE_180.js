@@ -7,8 +7,6 @@ const datauri = new DataURI();
 const mod = (x, n) => (x % n + n) % n;
 
 let canDrag = false,
-    dragging = false,
-    wasDragging = false,
     imgEl,
     vidEl,
     curEl,
@@ -30,13 +28,10 @@ let canDrag = false,
     mouseX,
     mouseY,
     mouseDown = false,
-    mouseRightDown = false,
     panX = 0,
     panY = 0,
     panStartX = 0,
     panStartY = 0,
-    angle = 0,
-    startAngle = 0,
     border = false,
     pinned = false;
 
@@ -72,20 +67,6 @@ function init(){
         console.log('l')
         document.getElementById('drag').style.display = 'none';
     });*/
-    
-    vidEl.addEventListener('play', e => {
-        if(dragging || wasDragging) {
-            wasDragging = false;
-            vidEl.pause();
-        }
-    });
-    
-    vidEl.addEventListener('pause', e => {
-        if(dragging || wasDragging) {
-            wasDragging = false;
-            vidEl.play();
-        }
-    });
 }
 window.onload = init;
 
@@ -116,12 +97,6 @@ window.addEventListener('keydown', e => {
         case 'a':
             togglePinned();
             break;
-        case 'Escape':
-            window.close();
-            break;
-        case ' ':
-            resetAll();
-            break;
     }
 });
 window.addEventListener('keyup', e => {
@@ -145,38 +120,22 @@ window.addEventListener('mouseup', onMouseUp);
 window.addEventListener('mousemove', onMouseMove);
 
 function onMouseDown(e) {
-    if(e.button === 0){
-        mouseDown = true;
-    } else if(e.button === 2){
-        mouseRightDown = true;
-    }
-    wasDragging = false;
+    mouseDown = true;
     mouseStartX = e.clientX;  
     mouseStartY = e.clientY;
     panStartX = panX;
     panStartY = panY;
-    startAngle = angle;
     
     e.stopPropagation();
     e.preventDefault();
     
-    if(!ctrl && !animationId && mouseDown){
+    if(!ctrl && !animationId){
         animationId = requestAnimationFrame(moveWindow);
     }
 }
 
 function onMouseUp(e) {
-    if(e.button === 0){
-        mouseDown = false;
-    } else if(e.button === 2){
-        mouseRightDown = false;
-    }
-    if(dragging){
-        dragging = false;
-        wasDragging = true;
-        e.stopPropagation();
-        e.preventDefault();
-    }
+    mouseDown = false;
     ipcRenderer.send('windowMoved');
     cancelAnimationFrame(animationId);
     animationId = null;
@@ -192,17 +151,11 @@ function moveWindow() {
 function onMouseMove(e) {
     mouseX = e.clientX;
     mouseY = e.clientY;
-    if(mouseDown && (mouseX !== mouseStartX || mouseY !== mouseStartY)){
-        dragging = true;
-    }
     if(!ctrl){
         return;
     }
-    if(ctrl && mouseDown){
+    if(mouseDown){
         pan(mouseX - mouseStartX, mouseY - mouseStartY);
-    }
-    if(mouseRightDown){
-        rotateCoords(mouseX, mouseY, mouseStartX, mouseStartY);
     }
 }
 
@@ -211,20 +164,6 @@ function pan(x, y){
     panY = panStartY + y;
     containerEl.style.left = `${panX}px`;
     containerEl.style.top = `${panY}px`;
-}
-
-function rotateCoords(x, y, origX, origY){
-    let bounds = curEl.getBoundingClientRect(),
-        centerX = bounds.x + bounds.width / 2,
-        centerY = bounds.y + bounds.height / 2;
-    let origAngle = mod((180 / Math.PI) * Math.atan2(origY - centerY, origX - centerX), 360),
-        curAngle = mod((180 / Math.PI) * Math.atan2(y - centerY, x - centerX), 360);
-    rotate(curAngle - origAngle);
-}
-
-function rotate(a){
-    angle = mod((startAngle + a), 360);
-    containerEl.style.transform = `rotate(${angle}deg)`;
 }
 
 function toggleBorder(){
@@ -281,10 +220,6 @@ function loadData(data){
 }
 
 function loadDone(){
-    resetAll();
-}
-
-function resetAll(){
     if(curEl === imgEl){
         width = curEl.naturalWidth;
         height = curEl.naturalHeight;
@@ -292,8 +227,6 @@ function resetAll(){
         width = curEl.videoWidth;
         height = curEl.videoHeight;
     }
-    startAngle = 0;
-    rotate(0);
     zoom = 1;
     zoomStage = 0;
     relZoom(0);

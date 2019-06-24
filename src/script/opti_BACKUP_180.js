@@ -145,12 +145,16 @@ window.addEventListener('mouseup', onMouseUp);
 window.addEventListener('mousemove', onMouseMove);
 
 function onMouseDown(e) {
+<<<<<<< HEAD
     if(e.button === 0){
         mouseDown = true;
     } else if(e.button === 2){
         mouseRightDown = true;
     }
+=======
+    mouseDown = true;
     wasDragging = false;
+>>>>>>> 1.0.0
     mouseStartX = e.clientX;  
     mouseStartY = e.clientY;
     panStartX = panX;
@@ -166,16 +170,19 @@ function onMouseDown(e) {
 }
 
 function onMouseUp(e) {
+<<<<<<< HEAD
     if(e.button === 0){
         mouseDown = false;
     } else if(e.button === 2){
         mouseRightDown = false;
-    }
+=======
+    mouseDown = false;
     if(dragging){
         dragging = false;
         wasDragging = true;
         e.stopPropagation();
         e.preventDefault();
+>>>>>>> 1.0.0
     }
     ipcRenderer.send('windowMoved');
     cancelAnimationFrame(animationId);
@@ -192,13 +199,17 @@ function moveWindow() {
 function onMouseMove(e) {
     mouseX = e.clientX;
     mouseY = e.clientY;
+<<<<<<< HEAD
+    if(ctrl && mouseDown){
+=======
     if(mouseDown && (mouseX !== mouseStartX || mouseY !== mouseStartY)){
         dragging = true;
     }
     if(!ctrl){
         return;
     }
-    if(ctrl && mouseDown){
+    if(mouseDown){
+>>>>>>> 1.0.0
         pan(mouseX - mouseStartX, mouseY - mouseStartY);
     }
     if(mouseRightDown){
@@ -238,7 +249,6 @@ function toggleBorder(){
 
 function togglePinned(){
     ipcRenderer.send('setAlwaysOnTop', pinned = !pinned);
-    console.log(pinned);
 }
 
 
@@ -344,7 +354,7 @@ function loadDirectory(dir, name){
             }
             localFiles = list;
             fileIndex = list.indexOf(name);
-            console.log(list, name, fileIndex);
+            //console.log(list, name, fileIndex);
         });
     })
 }
@@ -367,10 +377,8 @@ function relZoom(dir){
     if(!curEl){
         return;
     }
-    console.log(zoom);
     if(zoom === null){
         let scale = Math.min(curEl.clientWidth, curEl.clientHeight) / Math.min(width, height);
-        console.log(scale);
         if(scale >= 1){
             zoomStage = Math.round(scale) - 1;
         } else {
