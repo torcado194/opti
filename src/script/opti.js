@@ -100,6 +100,12 @@ window.addEventListener('keydown', e => {
         case 'a':
             togglePinned();
             break;
+        case 'Escape':
+            window.close();
+            break;
+        case ' ':
+            resetAll();
+            break;
     }
 });
 window.addEventListener('keyup', e => {
@@ -179,10 +185,17 @@ function pan(x, y){
 }
 
 function rotateCoords(x, y, origX, origY){
-    let origAngle = mod((180 / Math.PI) * Math.atan2(origY - window.innerHeight / 2, origX - window.innerWidth / 2), 360),
-        curAngle = mod((180 / Math.PI) * Math.atan2(y - window.innerHeight / 2, x - window.innerWidth / 2), 360);
-    angle = mod((startAngle + curAngle - origAngle), 360);
-    curEl.style.transform = `translate(-50%, -50%) rotate(${angle}deg)`;
+    let bounds = curEl.getBoundingClientRect(),
+        centerX = bounds.x + bounds.width / 2,
+        centerY = bounds.y + bounds.height / 2;
+    let origAngle = mod((180 / Math.PI) * Math.atan2(origY - centerY, origX - centerX), 360),
+        curAngle = mod((180 / Math.PI) * Math.atan2(y - centerY, x - centerX), 360);
+    rotate(curAngle - origAngle);
+}
+
+function rotate(a){
+    angle = mod((startAngle + a), 360);
+    containerEl.style.transform = `rotate(${angle}deg)`;
 }
 
 function toggleBorder(){
@@ -239,6 +252,10 @@ function loadData(data){
 }
 
 function loadDone(){
+    resetAll();
+}
+
+function resetAll(){
     if(curEl === imgEl){
         width = curEl.naturalWidth;
         height = curEl.naturalHeight;
@@ -246,6 +263,8 @@ function loadDone(){
         width = curEl.videoWidth;
         height = curEl.videoHeight;
     }
+    startAngle = 0;
+    rotate(0);
     zoom = 1;
     zoomStage = 0;
     relZoom(0);
