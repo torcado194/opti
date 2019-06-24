@@ -1,5 +1,5 @@
 const electron = require('electron');
-const {app, BrowserWindow, ipcMain} = electron;
+const {app, BrowserWindow, ipcMain, webContents} = electron;
 
 let screen;
 
@@ -7,15 +7,14 @@ if(process.env.NODE_ENV === 'development'){
     require('electron-reload')(__dirname);
 }
 
-let win,
-    minWidth = 120,
+let minWidth = 120,
     minHeight = 120;
 
 process.env.MIN_WIDTH = minWidth;
 process.env.MIN_HEIGHT = minHeight;
 
-function createWindow(){
-    win = new BrowserWindow({
+function createWindow(file){
+    let win = new BrowserWindow({
         width: 800,
         height: 600,
         minWidth,
@@ -34,18 +33,37 @@ function createWindow(){
     });
     win.loadFile('src/index.html');
     win.webContents.on('did-finish-load', () => {
-        win.webContents.send('open', process.argv[1]);
+        win.webContents.send('open', file ? [0, file] : process.argv);
     });
     win.on('closed', () => {
-        win = null
+        win = null;
     });
     screen = electron.screen;
 }
 
-app.on('ready', createWindow);
+app.on('ready', (e) => createWindow());
 
+ipcMain.on('new', (e, file) => {
+    console.log(e);
+    console.log(this);
+    createWindow(file);
+});
+
+ipcMain.on('test', (e, filename) => {
+    console.log('=>', filename);
+    console.log(e);
+    console.log(e.frameId);
+    for(let i = 0; i < 5; i++){
+        console.log('??', i, ':', BrowserWindow.fromId(i) === null);
+    }
+    console.log(e.sender.id);
+    console.log(webContents.fromId(e.sender.id));
+    console.log(e.sender.getOwnerBrowserWindow());
+    console.log('========');
+});
 
 ipcMain.on('resize', (e, w, h, center) => {
+    let win = e.sender.getOwnerBrowserWindow();
     let [oldW, oldH] = win.getSize(),
         [oldX, oldY] = win.getPosition();
     win.setSize(w, h);
@@ -58,7 +76,8 @@ ipcMain.on('resize', (e, w, h, center) => {
     }
 });
 
-ipcMain.on('windowMoving', (e, startX, startY) => {
+ipcMain.on('windowMoving', (e, startX, startY, filename) => {
+    let win = e.sender.getOwnerBrowserWindow();
     const { x, y } = electron.screen.getCursorScreenPoint();
     win.setPosition(x - startX, y - startY);
 });
@@ -68,6 +87,15 @@ ipcMain.on('windowMoved', () => {
 });
 
 ipcMain.on('setAlwaysOnTop', (e, state) => {
+    let win = e.sender.getOwnerBrowserWindow();
     console.log({state});
     win.setAlwaysOnTop(state);
+});
+
+ipcMain.on('getCursorPosition', (e) => {
+    let win = e.sender.getOwnerBrowserWindow();
+    const { x, y } = electron.screen.getCursorScreenPoint(),
+          [winX, winY] = win.getPosition();
+    e.returnValue = {x: x - winX, y: y - winY};
+    //win.webContents.send('mousemove', , );
 });

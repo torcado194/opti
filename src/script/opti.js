@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const DataURI = require('datauri');
 const datauri = new DataURI();
+const { spawn } = require('child_process');
 
 const mod = (x, n) => (x % n + n) % n;
 
@@ -24,7 +25,8 @@ let canDrag = false,
     fileIndex = 0,
     shift,
     ctrl,
-    animationId,
+    moveAnimId,
+    rotateAnimId,
     mouseStartX,
     mouseStartY,
     mouseX,
@@ -43,10 +45,38 @@ let canDrag = false,
 
 ipcRenderer.on('open', (event, p) => {
     console.log(p);
-    if(p && p !== '.'){
-        loadFile(p);
+    if(p && p.length > 0){
+        p.slice(1).forEach((f, i) => {
+            if(i === 0){
+                console.log('load', f);
+                loadFile(f);
+            } else {
+                console.log('instance', f);
+                loadInstance(f);
+            }
+        });
     }
 });
+
+function loadInstance(file){
+    console.log('send', file);
+    ipcRenderer.send('new', file);
+}
+
+window.addEventListener('close', e => {
+    if(moveAnimId){
+        cancelAnimationFrame(moveAnimId);
+        moveAnimId = null;
+    }
+    if(rotateAnimId){
+        cancelAnimationFrame(rotateAnimId);
+        rotateAnimId = null;
+    }
+});
+
+function test(){
+    ipcRenderer.send('test', filename);
+}
 
 function init(){
     console.log('ready');
@@ -122,6 +152,9 @@ window.addEventListener('keydown', e => {
         case ' ':
             resetAll();
             break;
+        case 't':
+            test();
+            break;
     }
 });
 window.addEventListener('keyup', e => {
@@ -160,8 +193,11 @@ function onMouseDown(e) {
     e.stopPropagation();
     e.preventDefault();
     
-    if(!ctrl && !animationId && mouseDown){
-        animationId = requestAnimationFrame(moveWindow);
+    if(!ctrl && !moveAnimId && mouseDown){
+        moveAnimId = requestAnimationFrame(moveWindow);
+    }
+    if(/*!ctrl && */!rotateAnimId && mouseRightDown){
+        rotateAnimId = requestAnimationFrame(mouseMoveGlobal);
     }
 }
 
@@ -178,14 +214,17 @@ function onMouseUp(e) {
         e.preventDefault();
     }
     ipcRenderer.send('windowMoved');
-    cancelAnimationFrame(animationId);
-    animationId = null;
+    cancelAnimationFrame(moveAnimId);
+    moveAnimId = null;
+    cancelAnimationFrame(rotateAnimId);
+    rotateAnimId = null;
 }
 
 function moveWindow() {
     if(!ctrl){
-        ipcRenderer.send('windowMoving', mouseStartX, mouseStartY);
-        animationId = requestAnimationFrame(moveWindow);
+        console.log(filename);
+        ipcRenderer.send('windowMoving', mouseStartX, mouseStartY, filename);
+        moveAnimId = requestAnimationFrame(moveWindow);
     }
 }
 
@@ -201,9 +240,16 @@ function onMouseMove(e) {
     if(ctrl && mouseDown){
         pan(mouseX - mouseStartX, mouseY - mouseStartY);
     }
+}
+
+function mouseMoveGlobal(){
+    let {x, y} = ipcRenderer.sendSync('getCursorPosition');
+    mouseX = x;
+    mouseY = y;
     if(mouseRightDown){
         rotateCoords(mouseX, mouseY, mouseStartX, mouseStartY);
     }
+    rotateAnimId = requestAnimationFrame(mouseMoveGlobal);
 }
 
 function pan(x, y){
