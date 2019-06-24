@@ -1,8 +1,12 @@
-# <img src="https://raw.githubusercontent.com/torcado194/opti/master/icon-dark.png" alt="icon" width="48"/> opti
+<p align="center">
+    <img src="https://raw.githubusercontent.com/torcado194/opti/master/icon-dark.png" alt="icon" width="48"/>
+</p>
+
+# opti
 
 a simple, transparent media viewer
 
-**[download](https://github.com/torcado194/opti/releases)**
+ **[download](https://github.com/torcado194/opti/releases)**
 
 ------
 
