@@ -1,9 +1,8 @@
 const {ipcRenderer} = require('electron');
 const fs = require('fs');
 const path = require('path');
-const DataURI = require('datauri');
-const datauri = new DataURI();
 const { spawn } = require('child_process');
+const fileType = require('file-type');
 
 const mod = (x, n) => (x % n + n) % n;
 
@@ -289,17 +288,27 @@ function togglePinned(){
 
 
 function loadFile(pathname){
-    datauri.encode(pathname, (err, data) => {
+    if(pathname === '.'){
+        return;
+    }
+    fs.readFile(pathname, (err, buffer) => {
         if(err){
-            return console.error(err);
+            console.error(err);
         }
-        loadData(data);
-        //loadDirectory(pathname);
+        console.log();
+        loadData(buffer, fileType(buffer).mime);
     });
+    
+    loadDirectory(pathname);
 }
 
-function loadData(data){
-    let mime;
+function loadData(data, mime){
+    if(mime){
+        data = `data:${mime};base64,${data.toString('base64')}`;
+    } else {
+        //"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAFQAAABUCAYAAAAcaxDBAAAACXBIWXMAAAsSAAALEgHS3X78AAAAG3RFWHRTb2Z0d2FyZQBDZWxzeXMgU3R1ZGlvIFRvb2zBp+F8AAAB8klEQVR42u3dMU7DMBTG8foyDIgbUDgFF0AMjMxwAGYYGRAX4BQQblAx9DLugmRHinFsPycv9v+bqrYvcX+NnGcPrbHW7tbOmTHFgzhaa3YKYgAFtG/QOVjH7yHv4Pfv7jy/HyrQAQW0I9ApvGysAtzg+CbQpZEBBbRxUB9xMTxBdB9ZAhdQQBsEDSLuL6cLhh/1sFK4gALaCGgyombQiriAArph0OSWaCtzaEVcQAHtCTSSi6v95POHyLFz6wAFFNAoqPhmx+eXe/zy6JCMG9fh4dm95+a6rG5lXEABBXR6Xnx9mg+aUgcooIBqAfUxRu1PBDSprjLoCM/DtX+4gNYAHSGe37qKtztAAQW0c9DA3XfWWj50h/YTAQ3WpSb2BQAKKKBZoN7Aq27fFYwLUEABlWubthpAAQW0dKUkvpqRPvYMREABBfTfD7oPbGxIZAi1Tbm4gAIKqOjcVrCxEl3lANojqJ8U3C2BJiLOAvXT3apJ4KocvQ4ooIBG59nceRPQDkEXw10TVPjOrgO0oXkTUHWguQ3/xiABBbQz0CZwBRD9ALrAVQmoBtAk2DWQC5r1UkRAAW0YtAhXYSQQAQW0E9AQrh9N0FPNutX6C7eAAqobNHiCALStCJ27DgcUUEAXh5aIXfGPVgAFFNCuAqhwTmrGtJU90Z9+AAAAAElFTkSuQmCC"
+        [mime, data] = data.split(',');
+    }
     curEl && curEl.removeAttribute('src');
     if(data[5] === 'i'){
         mime = 'image';
@@ -360,19 +369,12 @@ function drop(e){
     e.stopPropagation();
     
     const file = e.dataTransfer.files[0];
+    //TODO: multiple files here too
     if(!file || !file.name){
         return console.warn('no file');
     }
     
-    filePath = file.path;
-    
-    const reader = new FileReader();
-    reader.onload = function(e){
-        loadData(e.target.result);
-    }
-    reader.readAsDataURL(file);
-    
-    loadDirectory(filePath);
+    loadFile(file.path);
 }
 
 function loadDirectory(dir, name){
