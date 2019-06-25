@@ -3,6 +3,8 @@ const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
 const fileType = require('file-type');
+const http = require('http');
+const https = require('https');
 
 const mod = (x, n) => (x % n + n) % n;
 
@@ -13,6 +15,7 @@ let canDrag = false,
     vidEl,
     curEl,
     containerEl,
+    vidPaused = false,
     width = 0,
     height = 0,
     zoomStage = 0,
@@ -103,14 +106,14 @@ function init(){
     });*/
     
     vidEl.addEventListener('play', e => {
-        if(dragging || wasDragging) {
+        if(vidPaused && (dragging || wasDragging)) {
             wasDragging = false;
             vidEl.pause();
         }
     });
     
     vidEl.addEventListener('pause', e => {
-        if(dragging || wasDragging) {
+        if(!vidPaused && (dragging || wasDragging)) {
             wasDragging = false;
             vidEl.play();
         }
@@ -183,6 +186,7 @@ function onMouseDown(e) {
         mouseRightDown = true;
     }
     wasDragging = false;
+    vidPaused = vidEl.paused;
     mouseStartX = e.clientX;  
     mouseStartY = e.clientY;
     panStartX = panX;
@@ -221,7 +225,6 @@ function onMouseUp(e) {
 
 function moveWindow() {
     if(!ctrl){
-        console.log(filename);
         ipcRenderer.send('windowMoving', mouseStartX, mouseStartY, filename);
         moveAnimId = requestAnimationFrame(moveWindow);
     }
@@ -302,20 +305,48 @@ function loadFile(pathname){
     loadDirectory(pathname);
 }
 
+function loadUrl(url){
+    (url.startsWith('https') ? https : http).get(url, res => {
+        res.once('readable', () => {
+            let chunk = res.read(196); //mp2t magic number extends to 196, ignoring that the next highest is 58 (ASF) then like 36
+            res.destroy();
+            
+            //TODO: maybe abstract this process
+            let mime = fileType(chunk).mime;
+            curEl && curEl.removeAttribute('src');
+            if(mime[0] === 'i'){
+                curEl = imgEl;
+                curEl.setAttribute('src', url);
+                curEl.onload = loadDone;
+            } else if(mime[0] === 'v'){
+                curEl = vidEl;
+                curEl.setAttribute('src', url);
+                curEl.onloadedmetadata = loadDone;
+            }
+        });
+    });
+}
+
+function loadFromUrl(url){
+    (url.startsWith('https') ? https : http).get(url, res => {
+        res.once('readable', () => {
+            let chunk = res.read();
+            res.destroy();
+            
+            loadData(chunk, fileType(chunk).mime);
+        });
+    });
+}
+
 function loadData(data, mime){
     if(mime){
         data = `data:${mime};base64,${data.toString('base64')}`;
     } else {
-        //"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAFQAAABUCAYAAAAcaxDBAAAACXBIWXMAAAsSAAALEgHS3X78AAAAG3RFWHRTb2Z0d2FyZQBDZWxzeXMgU3R1ZGlvIFRvb2zBp+F8AAAB8klEQVR42u3dMU7DMBTG8foyDIgbUDgFF0AMjMxwAGYYGRAX4BQQblAx9DLugmRHinFsPycv9v+bqrYvcX+NnGcPrbHW7tbOmTHFgzhaa3YKYgAFtG/QOVjH7yHv4Pfv7jy/HyrQAQW0I9ApvGysAtzg+CbQpZEBBbRxUB9xMTxBdB9ZAhdQQBsEDSLuL6cLhh/1sFK4gALaCGgyombQiriAArph0OSWaCtzaEVcQAHtCTSSi6v95POHyLFz6wAFFNAoqPhmx+eXe/zy6JCMG9fh4dm95+a6rG5lXEABBXR6Xnx9mg+aUgcooIBqAfUxRu1PBDSprjLoCM/DtX+4gNYAHSGe37qKtztAAQW0c9DA3XfWWj50h/YTAQ3WpSb2BQAKKKBZoN7Aq27fFYwLUEABlWubthpAAQW0dKUkvpqRPvYMREABBfTfD7oPbGxIZAi1Tbm4gAIKqOjcVrCxEl3lANojqJ8U3C2BJiLOAvXT3apJ4KocvQ4ooIBG59nceRPQDkEXw10TVPjOrgO0oXkTUHWguQ3/xiABBbQz0CZwBRD9ALrAVQmoBtAk2DWQC5r1UkRAAW0YtAhXYSQQAQW0E9AQrh9N0FPNutX6C7eAAqobNHiCALStCJ27DgcUUEAXh5aIXfGPVgAFFNCuAqhwTmrGtJU90Z9+AAAAAElFTkSuQmCC"
         [mime, data] = data.split(',');
     }
     curEl && curEl.removeAttribute('src');
     if(data[5] === 'i'){
         mime = 'image';
-        
-        if(curEl && curEl !== imgEl){
-            curEl.removeAttribute('src');
-        }
         
         curEl = imgEl;
         curEl.setAttribute('src', data);
@@ -323,12 +354,9 @@ function loadData(data, mime){
     } else if(data[5] === 'v'){
         mime = 'video';
         
-        if(curEl && curEl !== imgEl){
-            curEl.removeAttribute('src');
-        }
-        
         curEl = vidEl;
         curEl.setAttribute('src', data);
+        vidPaused = false;
         curEl.onloadedmetadata = loadDone;
     } else {
         mime = undefined;
@@ -368,13 +396,30 @@ function drop(e){
     e.preventDefault();
     e.stopPropagation();
     
-    const file = e.dataTransfer.files[0];
-    //TODO: multiple files here too
-    if(!file || !file.name){
-        return console.warn('no file');
+    let files = Array.from(e.dataTransfer.files);
+    if(!files || files.length === 0){
+        let items = Array.from(e.dataTransfer.items)
+        
+        //NOTE: this probably doesn't work. need to look deeper into how to get this data
+        /*if(arr.some(v => /^image\/.+/.test(v.type))){
+            arr.filter(v => /^image\/.+/.test(v.type))[0].getAsString(loadData);
+        } else {
+        }*/
+        if(items.some(v => v.type === 'text/uri-list')){
+            items.filter(v => v.type === 'text/uri-list')[0].getAsString(loadUrl);
+        }
+    } else {
+        files.forEach((file, i) =>{
+            if(!file || !file.path){
+                return console.warn('no path');
+            }
+            if(i === 0){
+                loadFile(file.path);
+            } else {
+                loadInstance(file.path);
+            }
+        })
     }
-    
-    loadFile(file.path);
 }
 
 function loadDirectory(dir, name){
@@ -485,5 +530,5 @@ function onResize(e){
         return;
     }
     zoom = null;
-    curEl.classList.remove('pixel');
+    curEl && curEl.classList.remove('pixel');
 }
