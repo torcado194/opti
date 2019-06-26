@@ -48,6 +48,56 @@ let canDrag = false,
     curUrl,
     loadedData;
 
+let MEDIA_EXTENSIONS = [
+    'jpg',
+    'jpeg',
+    'jpe',
+    'jif', 
+    'jfif', 
+    'jfi',
+    'jxr',
+    'hdp',
+    'wdp',
+    'jp2', 
+    'j2k', 
+    'jpf', 
+    'jpx', 
+    'jpm', 
+    'mj2',
+    'png',
+    'apng',
+    'gif',
+    'agif',
+    'webp',
+    'mng',
+    'tif',
+    'tiff',
+    'svg',
+    'svgz',
+    'pdf',
+    'bmp',
+    'dib',
+    'xbm',
+    'ico',
+    'heif',
+    'heic',
+    
+    'flac',
+    'mp4',
+    'm4a',
+    'mp3',
+    'ogv',
+    'ogm',
+    'ogg',
+    'oga',
+    'opus',
+    'webm',
+    'wav',
+    'amr',
+    'avi',
+    '3gp',
+]
+
 
 ipcRenderer.on('open', (event, p) => {
     if(p && p.length > 0){
@@ -127,10 +177,18 @@ window.addEventListener('keydown', e => {
             ctrl = true;
             break;
         case 'ArrowRight':
-            nextFile();
+            if(e.shiftKey){
+                nextMedia();
+            } else {
+                nextFile();
+            }
             break;
         case 'ArrowLeft':
-            prevFile();
+            if(e.shiftKey){
+                prevMedia();
+            } else {
+                prevFile();
+            }
             break;
         case 'ArrowUp':
             relZoom(1);
@@ -435,7 +493,7 @@ function resetAll(){
     zoom = 1;
     zoomStage = 0;
     relZoom(0);
-    ipcRenderer.send('resize', width, height, true);
+    //ipcRenderer.send('resize', width, height, true);
 }
 
 window.addEventListener('dragover', drag);
@@ -507,6 +565,32 @@ function prevFile(){
     if(context === 'file'){
         fileIndex = mod((fileIndex - 1), localFiles.length);
         loadFile(path.resolve(filepath, localFiles[fileIndex]));
+    }
+}
+
+function nextMedia(){
+    if(context === 'file'){
+        let cycled = [...localFiles.slice(fileIndex), ...localFiles.slice(0,fileIndex)].slice(1);
+        for(let i = 0; i < cycled.length; i++){
+            if(MEDIA_EXTENSIONS.includes(cycled[i].split('.').pop())){
+                fileIndex = mod((fileIndex + (i+1)), localFiles.length);
+                loadFile(path.resolve(filepath, localFiles[fileIndex]));
+                break;
+            }
+        }
+    }
+}
+
+function prevMedia(){
+    if(context === 'file'){
+        let cycled = [...localFiles.slice(fileIndex), ...localFiles.slice(0,fileIndex)].slice(1).reverse();
+        for(let i = 0; i < cycled.length; i++){
+            if(MEDIA_EXTENSIONS.includes(cycled[i].split('.').pop())){
+                fileIndex = mod((fileIndex - (i+1)), localFiles.length);
+                loadFile(path.resolve(filepath, localFiles[fileIndex]));
+                break;
+            }
+        }
     }
 }
 
