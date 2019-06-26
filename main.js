@@ -44,22 +44,7 @@ function createWindow(file){
 app.on('ready', (e) => createWindow());
 
 ipcMain.on('new', (e, file) => {
-    console.log(e);
-    console.log(this);
     createWindow(file);
-});
-
-ipcMain.on('test', (e, filename) => {
-    console.log('=>', filename);
-    console.log(e);
-    console.log(e.frameId);
-    for(let i = 0; i < 5; i++){
-        console.log('??', i, ':', BrowserWindow.fromId(i) === null);
-    }
-    console.log(e.sender.id);
-    console.log(webContents.fromId(e.sender.id));
-    console.log(e.sender.getOwnerBrowserWindow());
-    console.log('========');
 });
 
 ipcMain.on('resize', (e, w, h, center) => {
@@ -71,7 +56,6 @@ ipcMain.on('resize', (e, w, h, center) => {
         let {width, height} = screen.getPrimaryDisplay().workAreaSize;
         w = Math.max(minWidth, Math.min(w, width + 20));
         h = Math.max(minHeight, Math.min(h, height + 60));
-        console.log(w, oldW, h, oldH);
         win.setPosition(oldX + Math.floor((oldW - w) / 2), oldY + Math.floor((oldH - h) / 2));
     }
 });
@@ -88,7 +72,6 @@ ipcMain.on('windowMoved', () => {
 
 ipcMain.on('setAlwaysOnTop', (e, state) => {
     let win = e.sender.getOwnerBrowserWindow();
-    console.log({state});
     win.setAlwaysOnTop(state);
 });
 

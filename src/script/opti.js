@@ -1,4 +1,4 @@
-const {ipcRenderer} = require('electron');
+const {ipcRenderer, clipboard, nativeImage} = require('electron');
 const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
@@ -42,7 +42,10 @@ let canDrag = false,
     angle = 0,
     startAngle = 0,
     border = false,
-    pinned = false;
+    pinned = false,
+    context,
+    curUrl,
+    loadedData;
 
 
 ipcRenderer.on('open', (event, p) => {
@@ -71,10 +74,6 @@ window.addEventListener('close', e => {
         rotateAnimId = null;
     }
 });
-
-function test(){
-    ipcRenderer.send('test', filename);
-}
 
 function init(){
     console.log('ready');
@@ -150,8 +149,15 @@ window.addEventListener('keydown', e => {
         case ' ':
             resetAll();
             break;
-        case 't':
-            test();
+        case 'c':
+            if(e.ctrlKey){
+                copy();
+            }
+            break;
+        case 'v':
+            if(e.ctrlKey){
+                paste();
+            }
             break;
     }
 });
@@ -250,6 +256,23 @@ function mouseMoveGlobal(){
     rotateAnimId = requestAnimationFrame(mouseMoveGlobal);
 }
 
+function copy(){
+    if(curEl === imgEl){
+        if(loadedData){
+            clipboard.writeImage(nativeImage.createFromDataURL(loadedData))
+            console.log('copied');
+        } else if(context === 'url') {
+            getData(curUrl, data => {
+                loadedData = data;
+                clipboard.writeImage(nativeImage.createFromDataURL(loadedData));
+                console.log('copied');
+            });
+        } else {
+            //?
+        }
+    }
+}
+
 function pan(x, y){
     panX = panStartX + x;
     panY = panStartY + y;
@@ -296,6 +319,8 @@ function loadFile(pathname){
         loadData(buffer, fileType(buffer).mime);
     });
     
+    context = 'file';
+    curUrl = null;
     loadDirectory(pathname);
 }
 
@@ -305,6 +330,9 @@ function loadUrl(url){
             let chunk = res.read(196); //mp2t magic number extends to 196, ignoring that the next highest is 58 (ASF) then like 36
             res.destroy();
             
+            context = 'url';
+            loadedData = null;
+            curUrl = url;
             //TODO: maybe abstract this process
             let mime = fileType(chunk).mime;
             curEl && curEl.removeAttribute('src');
@@ -327,8 +355,30 @@ function loadFromUrl(url){
             let chunk = res.read();
             res.destroy();
             
+            context = 'url';
             loadData(chunk, fileType(chunk).mime);
         });
+    });
+}
+
+function getData(url, cb){
+    (url.startsWith('https') ? https : http).get(url, res => {
+        let buffer;
+        res.on('readable', () => {
+            if(buffer){
+                let next = res.read();
+                if(next){
+                    buffer = Buffer.concat([buffer, next]);
+                }
+            } else {
+                buffer = res.read();
+            }
+            
+        });
+        res.on('end', () => {
+            res.destroy();
+            cb(`data:${fileType(buffer).mime};base64,${buffer.toString('base64')}`);
+        })
     });
 }
 
@@ -336,24 +386,21 @@ function loadData(data, mime){
     if(mime){
         data = `data:${mime};base64,${data.toString('base64')}`;
     } else {
-        [mime, data] = data.split(',');
+        mime = data.split(',')[0];
     }
+    loadedData = data;
     curEl && curEl.removeAttribute('src');
-    if(data[5] === 'i'){
-        mime = 'image';
-        
+    if(mime[0] === 'i'){
         curEl = imgEl;
         curEl.setAttribute('src', data);
         curEl.onload = loadDone;
-    } else if(data[5] === 'v'){
-        mime = 'video';
-        
+    } else if(mime[0] === 'v'){
         curEl = vidEl;
         curEl.setAttribute('src', data);
         vidPaused = false;
         curEl.onloadedmetadata = loadDone;
     } else {
-        mime = undefined;
+        
     }
 }
 
