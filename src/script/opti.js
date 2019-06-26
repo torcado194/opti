@@ -491,13 +491,17 @@ function loadDirectory(dir, name){
 }
 
 function nextFile(){
-    fileIndex = mod((fileIndex + 1), localFiles.length);
-    loadFile(path.resolve(filepath, localFiles[fileIndex]));
+    if(context === 'file'){
+        fileIndex = mod((fileIndex + 1), localFiles.length);
+        loadFile(path.resolve(filepath, localFiles[fileIndex]));
+    }
 }
 
 function prevFile(){
-    fileIndex = mod((fileIndex - 1), localFiles.length);
-    loadFile(path.resolve(filepath, localFiles[fileIndex]));
+    if(context === 'file'){
+        fileIndex = mod((fileIndex - 1), localFiles.length);
+        loadFile(path.resolve(filepath, localFiles[fileIndex]));
+    }
 }
 
 window.addEventListener('mousewheel', e => {
