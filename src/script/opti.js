@@ -8,6 +8,9 @@ const https = require('https');
 
 const mod = (x, n) => (x % n + n) % n;
 
+const MIN_WIDTH = parseInt(process.env.MIN_WIDTH);
+const MIN_HEIGHT = parseInt(process.env.MIN_HEIGHT);
+
 let canDrag = false,
     dragging = false,
     wasDragging = false,
@@ -43,6 +46,7 @@ let canDrag = false,
     panStartY = 0,
     angle = 0,
     startAngle = 0,
+    angleSnap = 15,
     isRotated = false,
     border = false,
     pinned = false,
@@ -171,13 +175,8 @@ window.onload = init;
 
 
 window.addEventListener('keydown', e => {
+    checkMeta(e);
     switch(e.key){
-        case 'Shift':
-            shift = true;
-            break;
-        case 'Control':
-            ctrl = true;
-            break;
         case 'ArrowRight':
             if(e.shiftKey){
                 nextMedia();
@@ -223,26 +222,24 @@ window.addEventListener('keydown', e => {
     }
 });
 window.addEventListener('keyup', e => {
-    if(e.key === 'Shift'){
-    }
-    if(e.key === 'Control'){
-        //document.body.classList.remove('border');
-    }
-    switch(e.key){
-        case 'Shift':
-            shift = false;
-            break;
-        case 'Control':
-            ctrl = false;
-            break;
-    }
+    checkMeta(e);
 });
+
+function checkMeta(e){
+    if(typeof e.shiftKey === 'boolean'){
+        shift = e.shiftKey;
+    }
+    if(typeof e.ctrlKey === 'boolean'){
+        ctrl = e.ctrlKey;
+    }
+}
 
 window.addEventListener('mousedown', onMouseDown);
 window.addEventListener('mouseup', onMouseUp);
 window.addEventListener('mousemove', onMouseMove);
 
 function onMouseDown(e) {
+    checkMeta(e);
     if(e.button === 0){
         mouseDown = true;
     } else if(e.button === 2){
@@ -268,6 +265,7 @@ function onMouseDown(e) {
 }
 
 function onMouseUp(e) {
+    checkMeta(e);
     if(e.button === 0){
         mouseDown = false;
     } else if(e.button === 2){
@@ -350,6 +348,9 @@ function pan(x, y){
 }
 
 function rotateCoords(x, y, origX, origY){
+    if(!curEl){
+        return;
+    }
     let bounds = curEl.getBoundingClientRect(),
         centerX = bounds.x + bounds.width / 2,
         centerY = bounds.y + bounds.height / 2;
@@ -360,6 +361,9 @@ function rotateCoords(x, y, origX, origY){
 
 function rotate(a){
     angle = mod((startAngle + a), 360);
+    if(shift){
+        angle = Math.round(angle / angleSnap) * angleSnap;
+    }
     containerEl.style.transform = `rotate(${angle}deg)`;
     if(!isRotated){
         isRotated = true;
@@ -367,13 +371,25 @@ function rotate(a){
     }
 }
 
-function resetPos(winW, winH){
-    curX = ((winW || window.innerWidth)/2 - curEl.clientWidth/2);
-    curY = ((winH || window.innerHeight)/2 - curEl.clientHeight/2);
-    curEl.style.left = curX + 'px';
-    curEl.style.top = curY + 'px';
+function recenter(winW, winH){
+    if(curEl){
+        curX = ((winW || window.innerWidth)/2 - curEl.clientWidth/2);
+        curY = ((winH || window.innerHeight)/2 - curEl.clientHeight/2);
+        curEl.style.left = curX + 'px';
+        curEl.style.top = curY + 'px';
+    }
 }
 
+/*function resetSize(){
+    let width = curEl && curEl.clientWidth,
+        height = curEl && curEl.clientHeight;
+    
+    curWidth = Math.max(width, MIN_WIDTH);
+    curHeight = Math.max(height, MIN_HEIGHT);
+    
+    curEl.style.width = curWidth + 'px';
+    curEl.style.height = curHeight + 'px';
+}*/
 
 function toggleBorder(){
     border = !border;
@@ -609,6 +625,7 @@ function prevMedia(){
 }
 
 window.addEventListener('mousewheel', e => {
+    checkMeta(e);
     relZoom(-e.deltaY);
 });
 
@@ -657,24 +674,28 @@ function updateZoom(){
         curEl.classList.remove('pixel');
     }
     
-    let newWidth = Math.min(screen.availWidth, width * zoom);
-    let newHeight = Math.min(screen.availHeight, height * zoom);
-    if(newWidth >= process.env.MIN_WIDTH || newHeight >= process.env.MIN_HEIGHT){
+    let newWidth = width * zoom,
+        newHeight = height * zoom,
+        clampedWidth = Math.round(Math.min(screen.availWidth, Math.max(MIN_WIDTH, newWidth))),
+        clampedHeight = Math.round(Math.min(screen.availHeight, Math.max(MIN_HEIGHT, newHeight)));
+    if(newWidth >= MIN_WIDTH || newHeight >= MIN_HEIGHT){
         curEl.classList.add('contain');
     } else {
         curEl.classList.remove('contain');
     }
     
-    curEl.setAttribute('width', width * zoom);
-    if(ctrl || width * zoom > newWidth || height * zoom > newHeight){
+    curEl.setAttribute('width', newWidth);
+    if(ctrl || newWidth > clampedWidth || newHeight > clampedHeight){
         curEl.classList.remove('contain');
     }
     if(!ctrl){
-        ignoreResize.push(true);
-        ipcRenderer.send('resize', Math.round(newWidth), Math.round(newHeight), true);
+        if(window.outerWidth !== clampedWidth && window.outerHeight !== clampedHeight){
+            ignoreResize.push(true);
+            ipcRenderer.send('resize', clampedWidth, clampedHeight, true);
+        }
         pan(panX = panStartX = 0, panY = panStartY = 0);
     }
-    resetPos();
+    recenter();
 }
 
 function resizeMax(){
@@ -695,11 +716,20 @@ function resizeMax(){
 window.addEventListener('resize', onResize);
 
 function onResize(e){
-    resetPos();
-    if(ignoreResize.length > 0){
-        ignoreResize.pop();
+    if(!curEl){
         return;
     }
+    if(ignoreResize.length > 0){
+        ignoreResize = [];
+    } else {
+        curEl && curEl.classList.remove('pixel');
+    }
     zoom = null;
-    curEl && curEl.classList.remove('pixel');
+    if(ctrl){
+        relZoom();
+        curEl.classList.remove('contain');
+    } else {
+        curEl.classList.add('contain');
+    }
+    recenter();
 }
