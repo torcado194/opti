@@ -487,13 +487,16 @@ function resetAll(){
         width = curEl.videoWidth;
         height = curEl.videoHeight;
     }
+    width = Math.min(screen.availWidth, width);
+    height = Math.min(screen.availHeight, height);
+    
     startAngle = 0;
     rotate(0);
     isRotated = false;
     zoom = 1;
     zoomStage = 0;
     relZoom(0);
-    //ipcRenderer.send('resize', width, height, true);
+    ipcRenderer.send('resize', width, height, true);
 }
 
 window.addEventListener('dragover', drag);
