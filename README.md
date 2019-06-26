@@ -21,10 +21,14 @@ a simple, transparent media viewer
 |------------------------------:|:------------------------------|
 |                            `b`| toggle border                 |
 |                            `a`| toggle always on top          |
-|                        `right`| next image                    |
-|                         `left`| previous image                |
+|                   `right/left`| next/previous file            |
+|             `shift+right/left`| next/previous media file      |
 |                         `drag`| move window                   |
 |                    `ctrl+drag`| pan image                     |
+|                   `rightclick`| rotate                        |
+|             `shift+rightclick`| snap-rotate                   |
 |                   `drag edges`| blurry scale image and window |
-|          `scroll` \| `up/down`| pixel scale image and window  |
-|`ctrl+scroll` \| `ctrl+up/down`| pixel scale image             |
+|             `scroll | up/down`| pixel scale image and window  |
+|   `ctrl+scroll | ctrl+up/down`| pixel scale image             |
+|                        `space`| reset image                   |
+|                       `escape`| close                         |
