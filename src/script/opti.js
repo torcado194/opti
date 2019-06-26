@@ -46,14 +46,11 @@ let canDrag = false,
 
 
 ipcRenderer.on('open', (event, p) => {
-    console.log(p);
     if(p && p.length > 0){
         p.slice(1).forEach((f, i) => {
             if(i === 0){
-                console.log('load', f);
                 loadFile(f);
             } else {
-                console.log('instance', f);
                 loadInstance(f);
             }
         });
@@ -61,7 +58,6 @@ ipcRenderer.on('open', (event, p) => {
 });
 
 function loadInstance(file){
-    console.log('send', file);
     ipcRenderer.send('new', file);
 }
 
@@ -286,7 +282,6 @@ function toggleBorder(){
 
 function togglePinned(){
     ipcRenderer.send('setAlwaysOnTop', pinned = !pinned);
-    console.log(pinned);
 }
 
 
@@ -298,7 +293,6 @@ function loadFile(pathname){
         if(err){
             console.error(err);
         }
-        console.log();
         loadData(buffer, fileType(buffer).mime);
     });
     
@@ -437,7 +431,6 @@ function loadDirectory(dir, name){
             }
             localFiles = list;
             fileIndex = list.indexOf(name);
-            console.log(list, name, fileIndex);
         });
     })
 }
@@ -460,10 +453,8 @@ function relZoom(dir){
     if(!curEl){
         return;
     }
-    console.log(zoom);
     if(zoom === null){
         let scale = Math.min(curEl.clientWidth, curEl.clientHeight) / Math.min(width, height);
-        console.log(scale);
         if(scale >= 1){
             zoomStage = Math.round(scale) - 1;
         } else {
