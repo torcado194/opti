@@ -260,16 +260,24 @@ function copy(){
     if(curEl === imgEl){
         if(loadedData){
             clipboard.writeImage(nativeImage.createFromDataURL(loadedData))
-            console.log('copied');
         } else if(context === 'url') {
             getData(curUrl, data => {
                 loadedData = data;
                 clipboard.writeImage(nativeImage.createFromDataURL(loadedData));
-                console.log('copied');
             });
         } else {
             //?
         }
+    }
+    //TODO: video copy?
+}
+
+function paste(){
+    let image = clipboard.readImage();
+    if(image.isEmpty()){
+        loadUrl(clipboard.readText());
+    } else {
+        loadData(image.toDataURL());
     }
 }
 
@@ -386,7 +394,7 @@ function loadData(data, mime){
     if(mime){
         data = `data:${mime};base64,${data.toString('base64')}`;
     } else {
-        mime = data.split(',')[0];
+        mime = data.match(/^data:(.+);/)[1];
     }
     loadedData = data;
     curEl && curEl.removeAttribute('src');
