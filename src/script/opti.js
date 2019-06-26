@@ -35,6 +35,8 @@ let canDrag = false,
     mouseY,
     mouseDown = false,
     mouseRightDown = false,
+    curX,
+    curY,
     panX = 0,
     panY = 0,
     panStartX = 0,
@@ -365,6 +367,14 @@ function rotate(a){
     }
 }
 
+function resetPos(winW, winH){
+    curX = ((winW || window.innerWidth)/2 - curEl.clientWidth/2);
+    curY = ((winH || window.innerHeight)/2 - curEl.clientHeight/2);
+    curEl.style.left = curX + 'px';
+    curEl.style.top = curY + 'px';
+}
+
+
 function toggleBorder(){
     border = !border;
     if(border){
@@ -496,6 +506,7 @@ function resetAll(){
     zoom = 1;
     zoomStage = 0;
     relZoom(0);
+    pan(panX = panStartX = 0, panY = panStartY = 0);
     ipcRenderer.send('resize', width, height, true);
 }
 
@@ -663,6 +674,7 @@ function updateZoom(){
         ipcRenderer.send('resize', Math.round(newWidth), Math.round(newHeight), true);
         pan(panX = panStartX = 0, panY = panStartY = 0);
     }
+    resetPos();
 }
 
 function resizeMax(){
@@ -683,6 +695,7 @@ function resizeMax(){
 window.addEventListener('resize', onResize);
 
 function onResize(e){
+    resetPos();
     if(ignoreResize.length > 0){
         ignoreResize.pop();
         return;
