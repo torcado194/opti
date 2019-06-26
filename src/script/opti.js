@@ -513,8 +513,6 @@ function resetAll(){
         width = curEl.videoWidth;
         height = curEl.videoHeight;
     }
-    width = Math.min(screen.availWidth, width);
-    height = Math.min(screen.availHeight, height);
     
     startAngle = 0;
     rotate(0);
@@ -523,7 +521,7 @@ function resetAll(){
     zoomStage = 0;
     relZoom(0);
     pan(panX = panStartX = 0, panY = panStartY = 0);
-    ipcRenderer.send('resize', width, height, true);
+    ipcRenderer.send('resize', Math.min(screen.availWidth, width), Math.min(screen.availHeight, height), true);
 }
 
 window.addEventListener('dragover', drag);
@@ -678,7 +676,7 @@ function updateZoom(){
         newHeight = height * zoom,
         clampedWidth = Math.round(Math.min(screen.availWidth, Math.max(MIN_WIDTH, newWidth))),
         clampedHeight = Math.round(Math.min(screen.availHeight, Math.max(MIN_HEIGHT, newHeight)));
-    if(newWidth >= MIN_WIDTH || newHeight >= MIN_HEIGHT){
+    if(newWidth > MIN_WIDTH || newHeight > MIN_HEIGHT){
         curEl.classList.add('contain');
     } else {
         curEl.classList.remove('contain');
@@ -689,7 +687,7 @@ function updateZoom(){
         curEl.classList.remove('contain');
     }
     if(!ctrl){
-        if(window.outerWidth !== clampedWidth && window.outerHeight !== clampedHeight){
+        if(window.outerWidth !== clampedWidth || window.outerHeight !== clampedHeight){
             ignoreResize.push(true);
             ipcRenderer.send('resize', clampedWidth, clampedHeight, true);
         }
@@ -723,13 +721,13 @@ function onResize(e){
         ignoreResize = [];
     } else {
         curEl && curEl.classList.remove('pixel');
-    }
-    zoom = null;
-    if(ctrl){
-        relZoom();
-        curEl.classList.remove('contain');
-    } else {
-        curEl.classList.add('contain');
+        if(ctrl){
+            zoom = null;
+            relZoom();
+            curEl.classList.remove('contain');
+        } else {
+            curEl.classList.add('contain');
+        }
     }
     recenter();
 }
