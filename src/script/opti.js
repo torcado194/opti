@@ -41,6 +41,7 @@ let canDrag = false,
     panStartY = 0,
     angle = 0,
     startAngle = 0,
+    isRotated = false,
     border = false,
     pinned = false,
     context,
@@ -300,6 +301,10 @@ function rotateCoords(x, y, origX, origY){
 function rotate(a){
     angle = mod((startAngle + a), 360);
     containerEl.style.transform = `rotate(${angle}deg)`;
+    if(!isRotated){
+        isRotated = true;
+        //resizeMax();
+    }
 }
 
 function toggleBorder(){
@@ -426,6 +431,7 @@ function resetAll(){
     }
     startAngle = 0;
     rotate(0);
+    isRotated = false;
     zoom = 1;
     zoomStage = 0;
     relZoom(0);
@@ -570,6 +576,21 @@ function updateZoom(){
         ipcRenderer.send('resize', Math.round(newWidth), Math.round(newHeight), true);
         pan(panX = panStartX = 0, panY = panStartY = 0);
     }
+}
+
+function resizeMax(){
+    curEl.classList.remove('contain');
+    let {width, height} = curEl.getBoundingClientRect();
+    
+    let a = Math.atan((curEl.clientHeight) / (curEl.clientWidth));
+    
+    width = (curEl.clientWidth)*Math.abs(Math.cos(a)) + (curEl.clientHeight)*Math.abs(Math.sin(a));
+    height = width;
+    
+    width = Math.min(screen.availWidth, width);
+    height = Math.min(screen.availHeight, height);
+    
+    ipcRenderer.send('resize', Math.round(width), Math.round(height), true);
 }
 
 window.addEventListener('resize', onResize);
