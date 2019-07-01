@@ -41,7 +41,15 @@ function createWindow(file){
     screen = electron.screen;
 }
 
-app.on('ready', (e) => createWindow());
+app.on('ready', (e) => {
+    if(process.platform === 'linux'){
+        setTimeout(()=>{
+            createWindow();
+        }, 300);
+    } else {
+        createWindow();
+    }
+});
 
 ipcMain.on('new', (e, file) => {
     createWindow(file);

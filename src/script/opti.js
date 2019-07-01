@@ -108,10 +108,15 @@ let MEDIA_EXTENSIONS = [
 ipcRenderer.on('open', (event, p) => {
     if(p && p.length > 0){
         p.slice(1).forEach((f, i) => {
+            /*if(f.startsWith('-')){
+                return;
+            }*/
             if(i === 0){
+                console.log('f', f);
                 loadFile(f);
             } else {
                 loadInstance(f);
+                console.log('i', f);
             }
         });
     }

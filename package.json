@@ -6,12 +6,17 @@
   "scripts": {
     "start": "set NODE_ENV=development&&electron .",
     "pack": "build --dir",
-    "dist": "build"
+    "dist": "build",
+    "dist-linux": "build --linux"
   },
-  "author": "torcado",
+  "author": {
+    "name": "torcado",
+    "email": "me@torcado.com",
+    "url": "http://torcado.com"
+  },
   "license": "ISC",
   "devDependencies": {
-    "electron": "^5.0.4",
+    "electron": "^5.0.6",
     "electron-builder": "^20.44.4",
     "electron-reload": "^1.4.0"
   },
@@ -26,7 +31,7 @@
     },
     "files": [
       "!**/_*",
-	  "!./dist/*",
+      "!./dist/*",
       "!./screenshots/*",
       "!./package-lock.json"
     ],
@@ -35,7 +40,8 @@
       "target": [
         "AppImage",
         "deb"
-      ]
+      ],
+      "icon": "build/icon.png"
     },
     "win": {
       "target": "portable",
