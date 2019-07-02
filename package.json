@@ -7,7 +7,7 @@
     "start": "set NODE_ENV=development&&electron .",
     "pack": "build --dir",
     "dist": "build",
-    "dist-linux": "build --linux"
+    "dist-linux": "set DEBUG=electron-builder&&build --linux"
   },
   "author": {
     "name": "torcado",
@@ -27,7 +27,8 @@
   },
   "build": {
     "directories": {
-      "output": "./dist"
+      "output": "./dist",
+      "buildResources": "build"
     },
     "files": [
       "!**/_*",
@@ -41,7 +42,7 @@
         "AppImage",
         "deb"
       ],
-      "icon": "build/icon.png"
+      "icon": "build/icons"
     },
     "win": {
       "target": "portable",

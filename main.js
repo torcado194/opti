@@ -22,7 +22,7 @@ function createWindow(file){
         transparent: true,
         backgroundColor: '#00000000',
         resizable: true,
-        icon: __dirname + '/icon.ico',
+        icon: __dirname + '/icon.png',
         webPreferences: {
             nodeIntegration: true,
             zoomFactor: 1.0
@@ -53,6 +53,13 @@ app.on('ready', (e) => {
 
 ipcMain.on('new', (e, file) => {
     createWindow(file);
+});
+
+ipcMain.on('reload', (e, file) => {
+    createWindow(file);
+    let win = e.sender.getOwnerBrowserWindow();
+    win.close();
+    win = null;
 });
 
 ipcMain.on('resize', (e, w, h, center) => {

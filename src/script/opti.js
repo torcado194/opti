@@ -126,6 +126,10 @@ function loadInstance(file){
     ipcRenderer.send('new', file);
 }
 
+function reload(){
+    ipcRenderer.send('reload', filename);
+}
+
 window.addEventListener('close', e => {
     if(moveAnimId){
         cancelAnimationFrame(moveAnimId);
@@ -223,6 +227,9 @@ window.addEventListener('keydown', e => {
             if(e.ctrlKey){
                 paste();
             }
+            break;
+        case 'r':
+            reload();
             break;
     }
 });
