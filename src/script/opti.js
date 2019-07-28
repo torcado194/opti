@@ -445,7 +445,7 @@ function loadUrl(url){
             //TODO: maybe abstract this process
             let mime = fileType(chunk).mime;
             curEl && curEl.removeAttribute('src');
-            if(mime[0] === 'i'){
+            if(mime[0] === 'i' || mime[0] === 'a'){
                 curEl = imgEl;
                 curEl.setAttribute('src', url);
                 curEl.onload = loadDone;
@@ -492,6 +492,9 @@ function getData(url, cb){
 }
 
 function loadData(data, mime){
+    if(mime === 'application/xml'){
+        mime = 'image/svg+xml';
+    }
     if(mime){
         data = `data:${mime};base64,${data.toString('base64')}`;
     } else {
