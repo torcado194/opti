@@ -22,7 +22,7 @@
   },
   "dependencies": {
     "datauri": "git+https://git@github.com/torcado194/datauri.git",
-    "file-type": "^12.0.0",
+    "file-type": "^16.5.4",
     "mime-types": "^2.1.24"
   },
   "build": {
