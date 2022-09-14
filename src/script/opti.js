@@ -585,7 +585,6 @@ function loadFile(pathname, ignoreLoad){
                     return console.error(err);
                 }
                 let type = fileType(buffer);
-                console.log(type);
                 if(type){
                     loadData(buffer, type.mime);
                 } else {
@@ -957,8 +956,6 @@ function relZoomTarget(dir, x, y){
         newZoom = 1 / (Math.abs(zoomStage) + 1);
     }
 
-    console.log(zoom, newZoom)
-
     panStartX = panX;
     panStartY = panY;
 
@@ -1040,10 +1037,9 @@ function updateZoom(){
     if(!ctrl){
         if(window.outerWidth !== clampedWidth || window.outerHeight !== clampedHeight){
             ignoreResize.push(true);
-            console.log('bbb');
             resizeWindow(clampedWidth, clampedHeight, true);
         }
-        if(!audEl && ignoreReset.length > 0){
+        if((audEl !== curEl) && ignoreReset.length > 0){
             //ignoreReset.pop();
         } else {
             pan(panX = panStartX = 0, panY = panStartY = 0);
