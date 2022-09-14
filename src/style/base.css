@@ -1,3 +1,7 @@
+@font-face {
+  font-family: "VarelaRound";
+  src: url("../font/VarelaRound-Regular.ttf");
+}
 * {
   box-sizing: border-box;
   user-select: none;
@@ -11,10 +15,22 @@ body {
 .border {
   border: 1px solid #03a9f4;
 }
+.border.locked {
+  border: 1px solid #f49403;
+}
+.border.pinned {
+  border: 1px solid #d941ff;
+}
+.border.pinned.locked {
+  border: 1px solid #ff4180;
+}
 img:not([src]) {
   display: none;
 }
 video:not([src]) {
+  display: none;
+}
+audio:not([src]) {
   display: none;
 }
 #drag {
@@ -33,7 +49,8 @@ video:not([src]) {
   height: 100%;
 }
 img,
-video {
+video,
+audio {
   /*position: absolute;
     left: 0;
     right: 0;
@@ -44,6 +61,11 @@ video {
     left: 50%;
     transform: translate(-50%, -50%);*/
   position: relative;
+  display: block;
+}
+audio {
+  min-width: 400px;
+  min-height: 120px;
 }
 .pixel {
   image-rendering: pixelated;
@@ -52,4 +74,80 @@ video {
   width: inherit;
   height: inherit;
   object-fit: contain;
+}
+.flipx {
+  transform: scaleX(-1);
+}
+.flipy {
+  transform: scaleY(-1);
+}
+.flipx {
+  transform: scaleX(-1);
+}
+.flipx.flipy {
+  transform: scaleX(-1) scaleY(-1);
+}
+#title {
+  position: absolute;
+  bottom: 9px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  color: white;
+  font-family: 'VarelaRound';
+  font-size: 19px;
+  text-shadow: 0 0 3px black, 0 0 3px black, 0 0 3px black, 0 0 3px black, 0 0 3px black, 0 0 3px black, 0 0 3px black, 0 0 3px black, 0 0 3px black, 0 0 3px black, 0 0 3px black, 0 0 3px black, 0 0 3px black, 0 0 3px black, 0 0 3px black, 0 0 3px black, 0 0 3px black, 0 0 3px black, 0 0 3px black, 0 0 3px black, 0 0 3px black, 0 0 3px black;
+}
+#help {
+  opacity: 0;
+  transition-property: opacity;
+  transition-duration: 0.5s;
+  pointer-events: none;
+  color: white;
+  font-family: 'VarelaRound';
+  font-size: 19px;
+  text-shadow: 0 0 3px black, 0 0 3px black, 0 0 3px black, 0 0 3px black, 0 0 3px black, 0 0 3px black, 0 0 3px black, 0 0 3px black, 0 0 3px black, 0 0 3px black, 0 0 3px black, 0 0 3px black, 0 0 3px black, 0 0 3px black, 0 0 3px black, 0 0 3px black, 0 0 3px black, 0 0 3px black, 0 0 3px black, 0 0 3px black, 0 0 3px black, 0 0 3px black;
+  background-color: #100f13b5;
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#help.show {
+  opacity: 1;
+}
+#help table {
+  display: block;
+  padding: 20px;
+}
+#help table td:nth-child(1) {
+  text-align: right;
+  color: white;
+}
+#help table td {
+  padding: 2px 13px;
+  color: #bfbbc7;
+  white-space: pre;
+}
+#help table td.cont {
+  padding-right: 1px;
+  position: relative;
+  top: -3px;
+}
+#help table td.ctrl {
+  color: #48ffff;
+}
+#help table td.shift {
+  color: #48ff87;
+}
+#help table td.alt {
+  color: #ff7497;
+}
+#help table td.cont + td {
+  top: -4px;
+  position: relative;
 }

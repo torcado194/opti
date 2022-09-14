@@ -1,4 +1,4 @@
-const {ipcRenderer, clipboard, nativeImage} = require('electron');
+const {ipcRenderer, clipboard, nativeImage, shell} = require('electron');
 const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
@@ -16,20 +16,28 @@ let canDrag = false,
     wasDragging = false,
     imgEl,
     vidEl,
+    audEl,
     curEl,
+    titleEl,
+    helpEl,
     containerEl,
+    imageContainerEl,
     vidPaused = false,
     width = 0,
     height = 0,
     zoomStage = 0,
     zoom = 1,
     ignoreResize = [],
+    ignoreReset = [],
+    forceReset = false,
     filepath,
     filename,
+    fullpath,
     localFiles = [],
     fileIndex = 0,
     shift,
     ctrl,
+    alt,
     moveAnimId,
     rotateAnimId,
     mouseStartX,
@@ -48,8 +56,11 @@ let canDrag = false,
     startAngle = 0,
     angleSnap = 15,
     isRotated = false,
+    opacity = 1,
     border = false,
     pinned = false,
+    passthrough = false,
+    windowLocked = false,
     context,
     curUrl,
     loadedData;
@@ -148,8 +159,13 @@ function init(){
     
     imgEl = document.getElementById('image');
     vidEl = document.getElementById('video');
+    audEl = document.getElementById('audio');
+    titleEl = document.getElementById('title');
+    helpEl = document.getElementById('help');
+    helpEl.style.opacity = ''
     
     containerEl = document.getElementById('container');
+    imageContainerEl = document.getElementById('image-container');
     
     border = document.body.classList.contains('border');
     
@@ -185,26 +201,38 @@ window.onload = init;
 
 window.addEventListener('keydown', e => {
     checkMeta(e);
-    switch(e.key){
-        case 'ArrowRight':
+    switch(e.key.toLowerCase()){
+        case 'arrowright':
             if(e.shiftKey){
                 nextMedia();
             } else {
                 nextFile();
             }
             break;
-        case 'ArrowLeft':
+        case 'arrowleft':
             if(e.shiftKey){
                 prevMedia();
             } else {
                 prevFile();
             }
             break;
-        case 'ArrowUp':
-            relZoom(1);
+        case 'arrowup':
+            if(e.altKey){
+                parentDirectory();
+            } else {
+                if(shift){
+                    adjustOpacity(1);
+                } else {
+                    relZoom(1);
+                }
+            }
             break;
-        case 'ArrowDown':
-            relZoom(-1);
+        case 'arrowdown':
+            if(shift){
+                adjustOpacity(-1);
+            } else {
+                relZoom(-1);
+            }
             break;
         case 'b':
             toggleBorder();
@@ -212,7 +240,13 @@ window.addEventListener('keydown', e => {
         case 'a':
             togglePinned();
             break;
-        case 'Escape':
+        case 'p':
+            togglePassthrough();
+            break;
+        case 'l':
+            toggleWindowLock();
+            break;
+        case 'escape':
             window.close();
             break;
         case ' ':
@@ -228,8 +262,32 @@ window.addEventListener('keydown', e => {
                 paste();
             }
             break;
+        case 'o':
+            if(fullpath){
+                shell.showItemInFolder(fullpath);
+            }
+            break;
         case 'r':
             reload();
+            break;
+        case 'f':
+            if(e.shiftKey){
+                flipy();
+            } else {
+                flipx();
+            }
+            break;
+        case 'enter':
+            if(context === 'directory'){
+                openDirectory();
+            }
+            break;
+        case 'backspace':
+            parentDirectory();
+            break;
+        case '?':
+        case '/':
+            toggleHelp();
             break;
     }
 });
@@ -243,6 +301,9 @@ function checkMeta(e){
     }
     if(typeof e.ctrlKey === 'boolean'){
         ctrl = e.ctrlKey;
+    }
+    if(typeof e.altKey === 'boolean'){
+        alt = e.altKey;
     }
 }
 
@@ -302,6 +363,11 @@ function moveWindow() {
         moveAnimId = requestAnimationFrame(moveWindow);
     }
 }
+function panWindow(dx, dy) {
+    if(!ctrl){
+        ipcRenderer.send('panWindow', dx, dy);
+    }
+}
 
 function onMouseMove(e) {
     mouseX = e.clientX;
@@ -329,15 +395,23 @@ function mouseMoveGlobal(){
 
 function copy(){
     if(curEl === imgEl){
+        let copyDataURI = alt;
         if(loadedData){
-            clipboard.writeImage(nativeImage.createFromDataURL(loadedData))
+            write();
         } else if(context === 'url') {
             getData(curUrl, data => {
                 loadedData = data;
-                clipboard.writeImage(nativeImage.createFromDataURL(loadedData));
+                write();
             });
         } else {
             //?
+        }
+        function write(){
+            if(copyDataURI){
+                clipboard.writeText(loadedData);
+            } else {
+                clipboard.writeImage(nativeImage.createFromDataURL(loadedData));
+            }
         }
     }
     //TODO: video copy?
@@ -345,6 +419,7 @@ function copy(){
 
 function paste(){
     let image = clipboard.readImage();
+    forceReset = true; //holding control because ctrl+v, but should reset anyway
     if(image.isEmpty()){
         loadUrl(clipboard.readText());
     } else {
@@ -392,6 +467,14 @@ function recenter(winW, winH){
     }
 }
 
+function flipx(){
+    curEl && curEl.classList.toggle('flipx');
+}
+
+function flipy(){
+    curEl && curEl.classList.toggle('flipy');
+}
+
 /*function resetSize(){
     let width = curEl && curEl.clientWidth,
         height = curEl && curEl.clientHeight;
@@ -405,60 +488,190 @@ function recenter(winW, winH){
 
 function toggleBorder(){
     border = !border;
-    if(border){
-        document.body.classList.add('border');
-    } else {
-        document.body.classList.remove('border');
-    }
+    document.body.classList.toggle('border', border);
 }
 
 function togglePinned(){
-    ipcRenderer.send('setAlwaysOnTop', pinned = !pinned);
+    pinned = !pinned
+    document.body.classList.toggle('pinned', pinned);
+    ipcRenderer.send('setAlwaysOnTop', pinned);
+}
+
+function togglePassthrough(){
+    ipcRenderer.send('setPassthrough', passthrough = !passthrough);
+}
+
+function toggleWindowLock(){
+    windowLocked = !windowLocked;
+    document.body.classList.toggle('locked', windowLocked);
 }
 
 
-function loadFile(pathname){
+function showDirectory(){
+    curEl = imgEl;
+    imgEl.src = 'image/optiFolder.svg';
+    imgEl.onload = () => resetAll();
+    titleEl.textContent = path.basename(fullpath);
+}
+
+function showFileError(){
+    curEl = imgEl;
+    imgEl.src = 'image/optiFileError.svg';
+    imgEl.onload = () => resetAll(ctrl);
+    titleEl.textContent = path.basename(fullpath);
+}
+
+function toggleHelp(){
+    helpEl.classList.toggle('show');
+    updateHelp();
+}
+
+function updateHelp(){
+    if(helpEl.classList.contains('show')){
+        let table = helpEl.children[0];
+        let xDiff = window.innerWidth - table.clientWidth;
+        let yDiff = window.innerHeight - table.clientHeight;
+        if(xDiff < 0 || yDiff < 0){
+            if(xDiff < yDiff){
+                table.style.transform = `scale(${1 - Math.abs(xDiff / table.clientWidth)})`;
+            } else {
+                table.style.transform = `scale(${1 - Math.abs(yDiff / table.clientHeight)})`;
+            }
+        } else {
+            table.style.transform = '';
+        }
+    }
+}
+
+function openDirectory(pathname){
+    if(!pathname){
+        if(context !== 'directory'){
+            return;
+        }
+        pathname = fullpath;
+    }
+    fs.readdir(pathname, (err, list) => {
+        if(err){
+            return console.error(err);
+        }
+        loadFile(path.resolve(pathname, list[0]));
+    });
+}
+
+function parentDirectory(){
+    openDirectory(path.resolve(fullpath, '..', '..'));
+}
+
+function loadFile(pathname, ignoreLoad){
     if(pathname === '.'){
         return;
     }
-    fs.readFile(pathname, (err, buffer) => {
-        if(err){
-            console.error(err);
-        }
-        loadData(buffer, fileType(buffer).mime);
-    });
-    
-    context = 'file';
     curUrl = null;
-    loadDirectory(pathname);
+    fullpath = pathname;
+    if(!ignoreLoad){
+        loadDirectory(pathname);
+    }
+    fs.lstat(pathname, (err, stats) => {
+        if(err){
+            return console.error(err);
+        }
+        if(stats.isDirectory()){
+            context = 'directory';
+            showDirectory();
+        } else {
+            context = 'file';
+            fs.readFile(pathname, (err, buffer) => {
+                if(err){
+                    return console.error(err);
+                }
+                let type = fileType(buffer);
+                console.log(type);
+                if(type){
+                    loadData(buffer, type.mime);
+                } else {
+                    //TODO: try loading as image and video, if both fail then show error
+                    //showFileError();
+                    tryLoad(pathname);
+                }
+            });
+        }
+    });
 }
 
 function loadUrl(url){
-    (url.startsWith('https') ? https : http).get(url, res => {
-        res.once('readable', () => {
-            let chunk = res.read(196); //mp2t magic number extends to 196, ignoring that the next highest is 58 (ASF) then like 36
-            res.destroy();
-            
-            context = 'url';
-            loadedData = null;
-            curUrl = url;
-            //TODO: maybe abstract this process
-            let mime = fileType(chunk).mime;
-            curEl && curEl.removeAttribute('src');
-            if(mime[0] === 'i' || mime[0] === 'a'){
-                curEl = imgEl;
-                curEl.setAttribute('src', url);
-                curEl.onload = loadDone;
-            } else if(mime[0] === 'v'){
-                curEl = vidEl;
-                curEl.setAttribute('src', url);
-                curEl.onloadedmetadata = loadDone;
-            }
+    if(url.startsWith('https')){
+        (url.startsWith('https') ? https : http).get(url, res => {
+            res.once('readable', () => {
+                let chunk = res.read(196); //mp2t magic number extends to 196, ignoring that the next highest is 58 (ASF) then like 36
+                res.destroy();
+                
+                context = 'url';
+                loadedData = null;
+                curUrl = url;
+                //TODO: maybe abstract this process
+                let mime = fileType(chunk).mime;
+                load(mime, url);
+            });
         });
-    });
+    } else if(url.startsWith('data')) {
+        context = 'uri';
+        loadedData = url;
+        curUrl = url;
+        //TODO: maybe abstract this process
+        let mime = url.substring(url.indexOf(":")+1, url.indexOf(";"));
+        load(mime, url);
+    } else {
+        tryLoad(url);
+    }
+
+    function load(mime, src){
+        curEl && curEl.removeAttribute('src');
+        if(mime.startsWith('image') || mime.startsWith('application')){
+            curEl = imgEl;
+            curEl.setAttribute('src', src);
+            curEl.onerror = showFileError;
+            curEl.onload = loadDone;
+        } else if(mime.startsWith('video')){
+            curEl = vidEl;
+            curEl.setAttribute('src', src);
+            curEl.onerror = showFileError;
+            curEl.onloadedmetadata = loadDone;
+        } else if(mime.startsWith('audio')){
+            curEl = audEl;
+            curEl.setAttribute('src', src);
+            curEl.onerror = showFileError;
+            curEl.onloadedmetadata = loadDone;
+        } else {
+            showFileError();
+        }
+    }
 }
 
-function loadFromUrl(url){
+function tryLoad(src){
+    curEl && curEl.removeAttribute('src');
+
+    tryImage();
+    function tryImage(){
+        curEl = imgEl;
+        curEl.setAttribute('src', src);
+        curEl.onerror = tryVideo;
+        curEl.onload = loadDone;
+    }
+    function tryVideo(){
+        curEl = vidEl;
+        curEl.setAttribute('src', src);
+        curEl.onerror = tryAudio;
+        curEl.onloadedmetadata = loadDone;
+    }
+    function tryAudio(){
+        curEl = audEl;
+        curEl.setAttribute('src', src);
+        curEl.onerror = showFileError;
+        curEl.onloadedmetadata = loadDone;
+    }
+}
+
+/* function loadFromUrl(url){
     (url.startsWith('https') ? https : http).get(url, res => {
         res.once('readable', () => {
             let chunk = res.read();
@@ -469,7 +682,7 @@ function loadFromUrl(url){
         });
     });
 }
-
+ */
 function getData(url, cb){
     (url.startsWith('https') ? https : http).get(url, res => {
         let buffer;
@@ -502,41 +715,86 @@ function loadData(data, mime){
     }
     loadedData = data;
     curEl && curEl.removeAttribute('src');
-    if(mime[0] === 'i'){
+    if(mime.startsWith('image') || mime.startsWith('application')){
         curEl = imgEl;
         curEl.setAttribute('src', data);
+        curEl.onerror = showFileError;
         curEl.onload = loadDone;
-    } else if(mime[0] === 'v'){
+    } else if(mime.startsWith('video')){
         curEl = vidEl;
         curEl.setAttribute('src', data);
+        curEl.onerror = showFileError;
         vidPaused = false;
         curEl.onloadedmetadata = loadDone;
+    } else if(mime.startsWith('audio')){
+        curEl = audEl;
+        curEl.setAttribute('src', data);
+        curEl.onerror = showFileError;
+        curEl.onloadedmetadata = loadDone;
     } else {
-        
+        // loadDone();
+        showFileError();
     }
 }
 
 function loadDone(){
-    resetAll();
+    titleEl.textContent = '';
+    if(forceReset){
+        forceReset = false;
+        resetAll();
+    } else {
+        resetAll(ctrl);
+    }
 }
 
-function resetAll(){
+function resetAll(saveState){
     if(curEl === imgEl){
         width = curEl.naturalWidth;
         height = curEl.naturalHeight;
     } else if(curEl === vidEl) {
         width = curEl.videoWidth;
         height = curEl.videoHeight;
+    } else if(curEl === audEl) {
+        width = curEl.clientWidth;
+        height = curEl.clientHeight;
     }
     
-    startAngle = 0;
-    rotate(0);
-    isRotated = false;
-    zoom = 1;
-    zoomStage = 0;
-    relZoom(0);
-    pan(panX = panStartX = 0, panY = panStartY = 0);
-    ipcRenderer.send('resize', Math.min(screen.availWidth, width), Math.min(screen.availHeight, height), true);
+    if(curEl !== vidEl) {
+        vidEl.removeAttribute('src');
+        vidEl.load();
+    }
+    if(curEl !== imgEl) {
+        imgEl.removeAttribute('src');
+    }
+    if(curEl !== audEl) {
+        audEl.removeAttribute('src');
+        audEl.load();
+    }
+    vidEl.onload = null;
+    imgEl.onload = null;
+    audEl.onload = null;
+    if(!saveState){
+        imgEl.classList.remove('flipx');
+        imgEl.classList.remove('flipy');
+        vidEl.classList.remove('flipx');
+        vidEl.classList.remove('flipy');
+
+        opacity = 1;
+        containerEl.style.opacity = opacity;
+        
+        startAngle = 0;
+        rotate(0);
+        isRotated = false;
+        zoom = 1;
+        zoomStage = 0;
+        relZoom(0);
+        pan(panX = panStartX = 0, panY = panStartY = 0);
+        if(curEl){
+            resizeWindow(Math.min(screen.availWidth, width), Math.min(screen.availHeight, height), true, true);
+        } else {
+            resizeWindow(500, 500, true, true);
+        }
+    }
 }
 
 window.addEventListener('dragover', drag);
@@ -583,7 +841,10 @@ function loadDirectory(dir, name){
         if(err){
             return console.error(err);
         }
-        if(!stats.isDirectory()){
+        if(stats.isDirectory()){
+            filename = name = '';
+            filepath = dir = path.resolve(dir, '..');
+        } else {
             filename = name = path.basename(dir);
             filepath = dir = path.resolve(dir, '..');
         }
@@ -598,26 +859,26 @@ function loadDirectory(dir, name){
 }
 
 function nextFile(){
-    if(context === 'file'){
+    if(context === 'file' || context === 'directory'){
         fileIndex = mod((fileIndex + 1), localFiles.length);
-        loadFile(path.resolve(filepath, localFiles[fileIndex]));
+        loadFile(path.resolve(filepath, localFiles[fileIndex]), true);
     }
 }
 
 function prevFile(){
-    if(context === 'file'){
+    if(context === 'file' || context === 'directory'){
         fileIndex = mod((fileIndex - 1), localFiles.length);
-        loadFile(path.resolve(filepath, localFiles[fileIndex]));
+        loadFile(path.resolve(filepath, localFiles[fileIndex]), true);
     }
 }
 
 function nextMedia(){
-    if(context === 'file'){
+    if(context === 'file' || context === 'directory'){
         let cycled = [...localFiles.slice(fileIndex), ...localFiles.slice(0,fileIndex)].slice(1);
         for(let i = 0; i < cycled.length; i++){
             if(MEDIA_EXTENSIONS.includes(cycled[i].split('.').pop())){
                 fileIndex = mod((fileIndex + (i+1)), localFiles.length);
-                loadFile(path.resolve(filepath, localFiles[fileIndex]));
+                loadFile(path.resolve(filepath, localFiles[fileIndex]), true);
                 break;
             }
         }
@@ -625,12 +886,12 @@ function nextMedia(){
 }
 
 function prevMedia(){
-    if(context === 'file'){
+    if(context === 'file' || context === 'directory'){
         let cycled = [...localFiles.slice(fileIndex), ...localFiles.slice(0,fileIndex)].slice(1).reverse();
         for(let i = 0; i < cycled.length; i++){
             if(MEDIA_EXTENSIONS.includes(cycled[i].split('.').pop())){
                 fileIndex = mod((fileIndex - (i+1)), localFiles.length);
-                loadFile(path.resolve(filepath, localFiles[fileIndex]));
+                loadFile(path.resolve(filepath, localFiles[fileIndex]), true);
                 break;
             }
         }
@@ -639,7 +900,15 @@ function prevMedia(){
 
 window.addEventListener('mousewheel', e => {
     checkMeta(e);
-    relZoom(-e.deltaY);
+    if(shift){
+        adjustOpacity(-e.deltaY);
+    } else {
+        if(alt){
+            relZoom(-e.deltaY);
+        } else {
+            relZoomTarget(-e.deltaY, e.clientX, e.clientY);
+        }
+    }
 });
 
 function relZoom(dir){
@@ -654,21 +923,80 @@ function relZoom(dir){
             zoomStage = 1 - Math.round(1/scale);
         }
     }
-    if(shift){
-        if(dir < 0){
-            zoomStage -= 8;
-        } else if(dir > 0) {
-            zoomStage += 8;
-        }
-    } else {
-        if(dir < 0){
-            zoomStage--;
-        } else if(dir > 0) {
-            zoomStage++;
-        }
+    if(dir < 0){
+        zoomStage--;
+    } else if(dir > 0) {
+        zoomStage++;
     }
     
     updateZoom();
+}
+
+function relZoomTarget(dir, x, y){
+    if(!curEl){
+        return;
+    }
+    if(zoom === null){
+        let scale = Math.min(curEl.clientWidth, curEl.clientHeight) / Math.min(width, height);
+        if(scale >= 1){
+            zoomStage = Math.round(scale) - 1;
+        } else {
+            zoomStage = 1 - Math.round(1/scale);
+        }
+    }
+    if(dir < 0){
+        zoomStage--;
+    } else if(dir > 0) {
+        zoomStage++;
+    }
+
+    let newZoom = zoom;
+    if(zoomStage >= 0){
+        newZoom = zoomStage + 1;
+    } else {
+        newZoom = 1 / (Math.abs(zoomStage) + 1);
+    }
+
+    console.log(zoom, newZoom)
+
+    panStartX = panX;
+    panStartY = panY;
+
+    let bounds = curEl.getBoundingClientRect(),
+        centerX = bounds.x + bounds.width / 2,
+        centerY = bounds.y + bounds.height / 2;
+
+    let xDiff = x - centerX;
+    let yDiff = y - centerY;
+    if(dir < 0){
+        xDiff *= -1;
+        yDiff *= -1;
+    }
+    if((zoom < 1 && dir > 0) || (newZoom < 1 && dir < 0)){
+        xDiff *= zoom * newZoom;
+        yDiff *= zoom * newZoom;
+    }
+    let newWidth = width * newZoom,
+        newHeight = height * newZoom;
+    if(ctrl || windowLocked || (newWidth >= screen.availWidth || newHeight >= screen.availHeight)){
+        ignoreReset.push(true);
+        pan(-xDiff * 1/zoom, -yDiff * 1/zoom);
+    } else {
+        if(newWidth > MIN_WIDTH && newHeight > MIN_HEIGHT){
+            panWindow(-xDiff * 1/zoom, -yDiff * 1/zoom);
+        }
+    }
+    updateZoom();
+}
+
+function adjustOpacity(delta){
+    if(delta > 0){
+        delta = 0.1;
+    } else if(delta < 0){
+        delta = -0.1;
+    }
+    opacity = Math.max(0, Math.min(1, opacity + delta));
+    containerEl.style.opacity = opacity;
 }
 
 function updateZoom(){
@@ -691,23 +1019,37 @@ function updateZoom(){
         newHeight = height * zoom,
         clampedWidth = Math.round(Math.min(screen.availWidth, Math.max(MIN_WIDTH, newWidth))),
         clampedHeight = Math.round(Math.min(screen.availHeight, Math.max(MIN_HEIGHT, newHeight)));
-    if(newWidth > MIN_WIDTH || newHeight > MIN_HEIGHT){
-        curEl.classList.add('contain');
-    } else {
+    if(windowLocked){
         curEl.classList.remove('contain');
+    } else {
+        if(newWidth > MIN_WIDTH || newHeight > MIN_HEIGHT){
+            curEl.classList.add('contain');
+        } else {
+            curEl.classList.remove('contain');
+        }
     }
     
     curEl.setAttribute('width', newWidth);
-    if(ctrl || newWidth > clampedWidth || newHeight > clampedHeight){
-        curEl.classList.remove('contain');
+    if(!windowLocked){
+        if(curEl !== audEl){
+            if(ctrl || newWidth > clampedWidth || newHeight > clampedHeight){
+                curEl.classList.remove('contain');
+            }
+        }
     }
     if(!ctrl){
         if(window.outerWidth !== clampedWidth || window.outerHeight !== clampedHeight){
             ignoreResize.push(true);
-            ipcRenderer.send('resize', clampedWidth, clampedHeight, true);
+            console.log('bbb');
+            resizeWindow(clampedWidth, clampedHeight, true);
         }
-        pan(panX = panStartX = 0, panY = panStartY = 0);
+        if(!audEl && ignoreReset.length > 0){
+            //ignoreReset.pop();
+        } else {
+            pan(panX = panStartX = 0, panY = panStartY = 0);
+        }
     }
+    ignoreReset.pop();
     recenter();
 }
 
@@ -723,17 +1065,24 @@ function resizeMax(){
     width = Math.min(screen.availWidth, width);
     height = Math.min(screen.availHeight, height);
     
-    ipcRenderer.send('resize', Math.round(width), Math.round(height), true);
+    resizeWindow(Math.round(width), Math.round(height), true);
+}
+
+function resizeWindow(w, h, center = false, onscreen = false){
+    if(!windowLocked){
+        ipcRenderer.send('resize', w, h, center, onscreen);
+    }
 }
 
 window.addEventListener('resize', onResize);
 
 function onResize(e){
+    updateHelp();
     if(!curEl){
         return;
     }
     if(ignoreResize.length > 0){
-        ignoreResize = [];
+        ignoreResize.pop();
     } else {
         curEl && curEl.classList.remove('pixel');
         if(ctrl){

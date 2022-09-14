@@ -19,16 +19,37 @@ a simple, transparent media viewer
 
 |             control | function                      |
 |--------------------:|:------------------------------|
+|                  `?`| show help                     |
 |                  `b`| toggle border                 |
 |                  `a`| toggle always on top          |
+|                  `l`| lock window position/size     |
+|                     |                               |
 |         `right/left`| next/previous file            |
-|   `shift+right/left`| next/previous media file      |
+|             `+shift`| next/previous media file      |
+|              `+ctrl`| retain image adjustments      |
+|              `enter`| open selected folder          |
+|`backspace \| alt+up`| return to parent folder       |
+|                  `o`| reveal file in explorer       |
+|                     |                               |
+|                  `f`| flip horizontally             |
+|             `+shift`| flip vertically               |
+|                     |                               |
 |               `drag`| move window                   |
-|          `ctrl+drag`| pan image                     |
-|         `rightclick`| rotate                        |
-|   `shift+rightclick`| snap-rotate                   |
+|              `+ctrl`| pan image                     |
+|                     |                               |
+|        `right-click`| rotate                        |
+|             `+shift`| snap-rotate                   |
+|                     |                               |
 |         `drag edges`| blurry scale image and window |
-|     `scroll/up/down`| pixel scale image and window  |
-|`ctrl+scroll/up/down`| pixel scale image             |
+|  `scroll \| up/down`| pixel scale image and window  |
+|              `+ctrl`| pixel scale image             |
+|               `+alt`| zoom from center              |
+|             `+shift`| adjust opacity                |
+|                     |                               |
+|             `ctrl+c`| copy bitmap                   |
+|               `+alt`| copy image data URI           |
+|             `ctrl+v`| paste bitmap/url              |
+|                     |                               |
 |              `space`| reset image                   |
 |             `escape`| close                         |
+|                  `r`| reload                        |

@@ -41,6 +41,9 @@ function createWindow(file){
     screen = electron.screen;
 }
 
+app.commandLine.appendSwitch('high-dpi-support', 1);
+app.commandLine.appendSwitch('force-device-scale-factor', 1);
+
 app.on('ready', (e) => {
     if(process.platform === 'linux'){
         setTimeout(()=>{
@@ -62,7 +65,7 @@ ipcMain.on('reload', (e, file) => {
     win = null;
 });
 
-ipcMain.on('resize', (e, w, h, center) => {
+ipcMain.on('resize', (e, w, h, center = false, onscreen = false) => {
     let win = e.sender.getOwnerBrowserWindow();
     let [oldW, oldH] = win.getSize(),
         [oldX, oldY] = win.getPosition();
@@ -71,11 +74,18 @@ ipcMain.on('resize', (e, w, h, center) => {
         let {width, height} = screen.getPrimaryDisplay().workAreaSize;
         w = Math.max(minWidth, Math.min(w, width + 20));
         h = Math.max(minHeight, Math.min(h, height + 60));
-        win.setPosition(oldX + Math.floor((oldW - w) / 2), oldY + Math.floor((oldH - h) / 2));
+        let newX = oldX + Math.floor((oldW - w) / 2),
+            newY = oldY + Math.floor((oldH - h) / 2);
+        if(onscreen){
+            win.setPosition(Math.max(0,newX), Math.max(0,newY));
+        } else {
+            win.setPosition(newX, newY);
+        }
     }
 });
 
 ipcMain.on('windowMoving', (e, startX, startY, filename) => {
+    //console.log('ccc');
     let win = e.sender.getOwnerBrowserWindow();
     const { x, y } = electron.screen.getCursorScreenPoint();
     win.setPosition(x - startX, y - startY);
@@ -85,9 +95,21 @@ ipcMain.on('windowMoved', () => {
     
 });
 
+ipcMain.on('panWindow', (e, dx, dy) => {
+    //console.log('ccc');
+    let win = e.sender.getOwnerBrowserWindow();
+    const [ x, y ] = win.getPosition();
+    win.setPosition(Math.round(x + dx), Math.round(y + dy));
+});
+
 ipcMain.on('setAlwaysOnTop', (e, state) => {
     let win = e.sender.getOwnerBrowserWindow();
     win.setAlwaysOnTop(state);
+});
+
+ipcMain.on('setPassthrough', (e, state) => {
+    let win = e.sender.getOwnerBrowserWindow();
+    win.setIgnoreMouseEvents(state);
 });
 
 ipcMain.on('getCursorPosition', (e) => {
