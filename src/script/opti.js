@@ -772,7 +772,7 @@ function resetAll(saveState){
     vidEl.onload = null;
     imgEl.onload = null;
     audEl.onload = null;
-    if(!saveState){
+    if(!saveState && !windowLocked){
         imgEl.classList.remove('flipx');
         imgEl.classList.remove('flipy');
         vidEl.classList.remove('flipx');
