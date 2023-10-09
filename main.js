@@ -41,6 +41,7 @@ function createWindow(file){
         win = null;
     });
     screen = electron.screen;
+    getBounds();
 }
 
 app.commandLine.appendSwitch('high-dpi-support', 1);
@@ -54,7 +55,9 @@ app.on('ready', (e) => {
     } else {
         createWindow();
     }
+});
 
+function getBounds(){
     screenBounds = screen.getPrimaryDisplay().bounds;
     let displays = screen.getAllDisplays();
     displays.forEach(display => {
@@ -72,7 +75,7 @@ app.on('ready', (e) => {
             screenBounds.height = display.bounds.y+display.bounds.height;
         }
     });
-});
+}
 
 ipcMain.on('new', (e, file) => {
     createWindow(file);
