@@ -1,10 +1,13 @@
-const {ipcRenderer, clipboard, nativeImage, shell} = require('electron');
+const {ipcRenderer, clipboard, nativeImage, shell, screen} = require('electron');
 const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
 const fileType = require('file-type');
+const gifFrames = require('gif-frames');
+const apng = require('apng-js').default;
 const http = require('http');
 const https = require('https');
+const { resolve } = require('dns');
 
 const mod = (x, n) => (x % n + n) % n;
 
@@ -30,6 +33,7 @@ let canDrag = false,
     ignoreResize = [],
     ignoreReset = [],
     forceReset = false,
+    screenBounds,
     filepath,
     filename,
     fullpath,
@@ -63,7 +67,21 @@ let canDrag = false,
     windowLocked = false,
     context,
     curUrl,
-    loadedData;
+    loadedData,
+    loadedBuffer,
+    loadedSource,
+    mimeType,
+    animated = false,
+    frameRate,
+    loadedGifFrames,
+    accumulatedGifDelays,
+    apngCanvas,
+    apngObj,
+    apngPlayer,
+    loadedApngFrames,
+    curSeekFrame = 0,
+    seeking = false,
+    playbackStart;
 
 let MEDIA_EXTENSIONS = [
     'jpg',
@@ -101,6 +119,7 @@ let MEDIA_EXTENSIONS = [
     
     'flac',
     'mp4',
+    'mkv',
     'm4a',
     'mp3',
     'ogv',
@@ -154,8 +173,28 @@ window.addEventListener('close', e => {
 
 function init(){
     console.log('ready');
+
+    //hack to allow loading invalid certificates
+    process.env.NODE_TLS_REJECT_UNAUTHORIZED = 0;
     
     ipcRenderer.send('resize', 500, 500);
+    
+    let displays = screen.getAllDisplays();
+    screenBounds = {x:0, y:0, width: window.screen.availWidth, height: window.screen.availHeight};
+    displays.forEach(display => {
+        if(display.bounds.x < screenBounds.x){
+            screenBounds.x = display.bounds.x;
+        }
+        if(display.bounds.y < screenBounds.y){
+            screenBounds.y = display.bounds.y;
+        }
+        if(display.bounds.x+display.bounds.width > screenBounds.width){
+            screenBounds.width = display.bounds.x+display.bounds.width;
+        }
+        if(display.bounds.y+display.bounds.height > screenBounds.height){
+            screenBounds.height = display.bounds.y+display.bounds.height;
+        }
+    });
     
     imgEl = document.getElementById('image');
     vidEl = document.getElementById('video');
@@ -168,19 +207,6 @@ function init(){
     imageContainerEl = document.getElementById('image-container');
     
     border = document.body.classList.contains('border');
-    
-    /*window.addEventListener('mouseover', e => {
-        console.log('s');
-        document.getElementById('drag').style.display = 'block';
-        setTimeout(()=>{
-            document.getElementById('drag').style.display = 'none';
-        }, 200);
-    });
-    
-    window.addEventListener('mouseleave', e => {
-        console.log('l')
-        document.getElementById('drag').style.display = 'none';
-    });*/
     
     vidEl.addEventListener('play', e => {
         if(vidPaused && (dragging || wasDragging)) {
@@ -250,7 +276,7 @@ window.addEventListener('keydown', e => {
             window.close();
             break;
         case ' ':
-            resetAll();
+            resetAll(false, e.ctrlKey);
             break;
         case 'c':
             if(e.ctrlKey){
@@ -288,6 +314,22 @@ window.addEventListener('keydown', e => {
         case '?':
         case '/':
             toggleHelp();
+            break;
+        case '>':
+        case '.':
+            if(e.shiftKey){
+                seekFrame(0.1);
+            } else {
+                seekFrame(1);
+            }
+            break;
+        case '<':
+        case ',':
+            if(e.shiftKey){
+                seekFrame(-0.1);
+            } else {
+                seekFrame(-1);
+            }
             break;
     }
 });
@@ -400,6 +442,11 @@ function copy(){
             write();
         } else if(context === 'url') {
             getData(curUrl, data => {
+                loadedData = data;
+                write();
+            });
+        } else if(context === 'file') {
+            getData(fullpath, data => {
                 loadedData = data;
                 write();
             });
@@ -580,21 +627,17 @@ function loadFile(pathname, ignoreLoad){
             showDirectory();
         } else {
             context = 'file';
-            fs.readFile(pathname, (err, buffer) => {
-                if(err){
-                    return console.error(err);
-                }
-                let type = fileType(buffer);
-                if(type){
-                    loadData(buffer, type.mime);
-                } else {
-                    //TODO: try loading as image and video, if both fail then show error
-                    //showFileError();
-                    tryLoad(pathname);
-                }
-            });
+            loadFileUrl(pathname);
         }
     });
+}
+
+async function readFirstNBytes(path, n) {
+    const chunks = [];
+    for await (let chunk of fs.createReadStream(path, { start: 0, end: n })) {
+      chunks.push(chunk);
+    }
+    return Buffer.concat(chunks);
 }
 
 function loadUrl(url){
@@ -605,15 +648,17 @@ function loadUrl(url){
                 res.destroy();
                 
                 context = 'url';
+                fullpath = null;
                 loadedData = null;
                 curUrl = url;
                 //TODO: maybe abstract this process
-                let mime = fileType(chunk).mime;
+                let mime = getMimeType(chunk);
                 load(mime, url);
             });
         });
     } else if(url.startsWith('data')) {
         context = 'uri';
+        fullpath = null;
         loadedData = url;
         curUrl = url;
         //TODO: maybe abstract this process
@@ -622,31 +667,39 @@ function loadUrl(url){
     } else {
         tryLoad(url);
     }
+}
 
-    function load(mime, src){
-        curEl && curEl.removeAttribute('src');
-        if(mime.startsWith('image') || mime.startsWith('application')){
-            curEl = imgEl;
-            curEl.setAttribute('src', src);
-            curEl.onerror = showFileError;
-            curEl.onload = loadDone;
-        } else if(mime.startsWith('video')){
-            curEl = vidEl;
-            curEl.setAttribute('src', src);
-            curEl.onerror = showFileError;
-            curEl.onloadedmetadata = loadDone;
-        } else if(mime.startsWith('audio')){
-            curEl = audEl;
-            curEl.setAttribute('src', src);
-            curEl.onerror = showFileError;
-            curEl.onloadedmetadata = loadDone;
-        } else {
-            showFileError();
-        }
+function loadFileUrl(path){
+    context = 'file';
+    tryLoad(path);
+    loadMetadata(path);
+}
+
+async function loadBuffer(){
+    if(context === 'file'){
+        loadFileBuffer();
+        return Promise.resolve();
+    } else if(context === 'url'){
+        return new Promise((resolve, reject) => {
+            getData(curUrl, ()=>{
+                resolve();
+            });
+        });
     }
 }
 
+function loadFileBuffer(pathname = null){
+    if(!pathname){
+        pathname = fullpath;
+    }
+    if(!pathname){
+        return;
+    }
+    loadedBuffer = fs.readFileSync(pathname);
+}
+
 function tryLoad(src){
+    resetData();
     curEl && curEl.removeAttribute('src');
 
     tryImage();
@@ -670,37 +723,87 @@ function tryLoad(src){
     }
 }
 
-/* function loadFromUrl(url){
-    (url.startsWith('https') ? https : http).get(url, res => {
-        res.once('readable', () => {
-            let chunk = res.read();
-            res.destroy();
-            
-            context = 'url';
-            loadData(chunk, fileType(chunk).mime);
-        });
-    });
+function load(mime, src, isData = false){
+    resetData();
+    mimeType = mime;
+    loadedSource = src;
+    if(isData) loadedData = src;
+    curEl && curEl.removeAttribute('src');
+    if(mime.startsWith('image') || mime.startsWith('application')){
+        if(mime.includes("gif") || mime.includes("apng")){
+            animated = true;
+        }
+        curEl = imgEl;
+        curEl.setAttribute('src', src);
+        curEl.onerror = showFileError;
+        curEl.onload = loadDone;
+    } else if(mime.startsWith('video')){
+        animated = true;
+        curEl = vidEl;
+        curEl.setAttribute('src', src);
+        curEl.onerror = showFileError;
+        curEl.onloadedmetadata = loadDone;
+    } else if(mime.startsWith('audio')){
+        curEl = audEl;
+        curEl.setAttribute('src', src);
+        curEl.onerror = showFileError;
+        curEl.onloadedmetadata = loadDone;
+    } else {
+        // tryLoad(src);
+        showFileError();
+    }
 }
- */
+
+async function loadMetadata(src){
+    let chunk = await readFirstNBytes(src, 196);
+    let mime = getMimeType(chunk);
+    mimeType = mime;
+    if(mime.startsWith('image') || mime.startsWith('application')){
+        if(mime.includes("gif") || mime.includes("apng")){
+            animated = true;
+        }
+    } else if(mime.startsWith('video')){
+        animated = true;
+    }
+}
+
 function getData(url, cb){
-    (url.startsWith('https') ? https : http).get(url, res => {
-        let buffer;
-        res.on('readable', () => {
-            if(buffer){
-                let next = res.read();
-                if(next){
-                    buffer = Buffer.concat([buffer, next]);
+    if(url.startsWith('http')){
+        (url.startsWith('https') ? https : http).get(url, res => {
+            let buffer;
+            res.on('readable', () => {
+                if(buffer){
+                    let next = res.read();
+                    if(next){
+                        buffer = Buffer.concat([buffer, next]);
+                    }
+                } else {
+                    buffer = res.read();
                 }
-            } else {
-                buffer = res.read();
-            }
-            
+                
+            });
+            res.on('end', () => {
+                res.destroy();
+                loadedBuffer = buffer;
+                loadedData = `data:${getMimeType(buffer)};base64,${buffer.toString('base64')}`;
+                cb(loadedData);
+            })
         });
-        res.on('end', () => {
-            res.destroy();
-            cb(`data:${fileType(buffer).mime};base64,${buffer.toString('base64')}`);
-        })
-    });
+    } else {
+        loadFileBuffer(url);
+        loadedData = `data:${getMimeType(loadedBuffer)};base64,${loadedBuffer.toString('base64')}`;
+        cb(loadedData);
+    }
+}
+
+function getMimeType(data){
+    let ft = fileType(data);
+    if(!ft && context == 'file'){
+        if(fullpath.toLowerCase().endsWith('svg')){
+            return 'image/svg+xml';
+        }
+    }
+    return ft.mime
 }
 
 function loadData(data, mime){
@@ -712,32 +815,15 @@ function loadData(data, mime){
     } else {
         mime = data.match(/^data:(.+);/)[1];
     }
-    loadedData = data;
-    curEl && curEl.removeAttribute('src');
-    if(mime.startsWith('image') || mime.startsWith('application')){
-        curEl = imgEl;
-        curEl.setAttribute('src', data);
-        curEl.onerror = showFileError;
-        curEl.onload = loadDone;
-    } else if(mime.startsWith('video')){
-        curEl = vidEl;
-        curEl.setAttribute('src', data);
-        curEl.onerror = showFileError;
-        vidPaused = false;
-        curEl.onloadedmetadata = loadDone;
-    } else if(mime.startsWith('audio')){
-        curEl = audEl;
-        curEl.setAttribute('src', data);
-        curEl.onerror = showFileError;
-        curEl.onloadedmetadata = loadDone;
-    } else {
-        // loadDone();
-        showFileError();
-    }
+    load(mime, data, true);
 }
 
 function loadDone(){
+    loadedSource = curEl.src;
     titleEl.textContent = '';
+    if(curEl === imgEl && animated){
+        playbackStart = Date.now();
+    }
     if(forceReset){
         forceReset = false;
         resetAll();
@@ -746,7 +832,28 @@ function loadDone(){
     }
 }
 
-function resetAll(saveState){
+function resetData(){
+    loadedData = null;
+    loadedBuffer = null;
+    apngCanvas = null;
+    apngObj = null;
+    apngPlayer = null;
+    loadedApngFrames = null;
+    
+    loadedGifFrames = null;
+    animated = false;
+    seeking = false;
+    curSeekFrame = 0;
+    mime = null;
+    // filepath = null;
+    // filename = null;
+    // fullpath = null;
+    loadedSource = null;
+    // context = null;
+    // curUrl = null;
+}
+
+function resetAll(saveState, keepFrame){
     if(curEl === imgEl){
         width = curEl.naturalWidth;
         height = curEl.naturalHeight;
@@ -769,9 +876,23 @@ function resetAll(saveState){
         audEl.removeAttribute('src');
         audEl.load();
     }
+
+    if(!keepFrame){
+        if(seeking && loadedSource){
+            seeking = false;
+            curSeekFrame = 0;
+            curEl.src = loadedSource;
+        }
+    }
+
     vidEl.onload = null;
+    vidEl.onerror = null;
+    vidEl.onloadedmetadata = null;
     imgEl.onload = null;
+    imgEl.onerror = null;
     audEl.onload = null;
+    audEl.onerror = null;
+    audEl.onloadedmetadata = null;
     if(!saveState && !windowLocked){
         imgEl.classList.remove('flipx');
         imgEl.classList.remove('flipy');
@@ -788,8 +909,9 @@ function resetAll(saveState){
         zoomStage = 0;
         relZoom(0);
         pan(panX = panStartX = 0, panY = panStartY = 0);
+        vidPaused = false;
         if(curEl){
-            resizeWindow(Math.min(screen.availWidth, width), Math.min(screen.availHeight, height), true, true);
+            resizeWindow(Math.min(screenBounds.width, width), Math.min(screenBounds.height, height), true, true);
         } else {
             resizeWindow(500, 500, true, true);
         }
@@ -975,7 +1097,7 @@ function relZoomTarget(dir, x, y){
     }
     let newWidth = width * newZoom,
         newHeight = height * newZoom;
-    if(ctrl || windowLocked || (newWidth >= screen.availWidth || newHeight >= screen.availHeight)){
+    if(ctrl || windowLocked || (newWidth >= screenBounds.width || newHeight >= screenBounds.height)){
         ignoreReset.push(true);
         pan(-xDiff * 1/zoom, -yDiff * 1/zoom);
     } else {
@@ -1014,8 +1136,8 @@ function updateZoom(){
     
     let newWidth = width * zoom,
         newHeight = height * zoom,
-        clampedWidth = Math.round(Math.min(screen.availWidth, Math.max(MIN_WIDTH, newWidth))),
-        clampedHeight = Math.round(Math.min(screen.availHeight, Math.max(MIN_HEIGHT, newHeight)));
+        clampedWidth = Math.round(Math.min(screenBounds.width, Math.max(MIN_WIDTH, newWidth))),
+        clampedHeight = Math.round(Math.min(screenBounds.height, Math.max(MIN_HEIGHT, newHeight)));
     if(windowLocked){
         curEl.classList.remove('contain');
     } else {
@@ -1058,8 +1180,8 @@ function resizeMax(){
     width = (curEl.clientWidth)*Math.abs(Math.cos(a)) + (curEl.clientHeight)*Math.abs(Math.sin(a));
     height = width;
     
-    width = Math.min(screen.availWidth, width);
-    height = Math.min(screen.availHeight, height);
+    width = Math.min(screenBounds.width, width);
+    height = Math.min(screenBounds.height, height);
     
     resizeWindow(Math.round(width), Math.round(height), true);
 }
@@ -1090,4 +1212,99 @@ function onResize(e){
         }
     }
     recenter();
+}
+
+async function seekFrame(delta = 1){
+    if(!animated) return;
+    if(curEl === vidEl){
+        if(!frameRate){
+            frameRate = vidEl.captureStream().getVideoTracks()[0].getSettings().frameRate;
+        }
+        if(!vidEl.paused){
+            vidEl.pause();
+        }
+        if(Math.abs(delta) < 1){
+            vidEl.currentTime =  mod(vidEl.currentTime + Math.sign(delta) * (1/60), vidEl.duration);
+        } else {
+            vidEl.currentTime = mod(vidEl.currentTime + delta * (1/frameRate), vidEl.duration);
+        }
+    } else if(mimeType == 'image/gif') {
+        var start = false;
+        if(!loadedGifFrames){
+            if(!loadedBuffer){
+                await loadBuffer();
+                if(!loadedBuffer){
+                    return;
+                }
+            }
+            loadedGifFrames = await gifFrames({ url: loadedBuffer, frames: 'all', outputType: 'png', cumulative: true });
+            start = true;
+            //attempt to show current frame form playback
+            /* curSeekFrame = 0;
+            var acc = 0;
+            accumulatedGifDelays = [];
+            loadedGifFrames.forEach((v) => {
+                acc += v.frameInfo.delay / 100;
+                accumulatedGifDelays.push(acc);
+            });
+            var pos = Date.now() - playbackStart;
+            pos = mod(pos, accumulatedGifDelays[accumulatedGifDelays.length-1]); //naively assumes looping gif
+            for(i = 0; i < accumulatedGifDelays.length; i++){
+                if(accumulatedGifDelays[i] >= pos){
+                    curSeekFrame = i;
+                    break;
+                }
+            } */
+        }
+        if(start){
+            curSeekFrame = 0;
+        } else {
+            delta = Math.sign(delta) * 1;
+            curSeekFrame = mod(curSeekFrame+delta, loadedGifFrames.length);
+        }
+        let png = loadedGifFrames[curSeekFrame].getImage();
+        let chunks = [];
+        png.on('data', function (chunk) {
+            chunks.push(chunk);
+        });
+        png.on('end', function () {
+            let result = Buffer.concat(chunks);
+            curEl.src = `data:${'image/png'};base64,${result.toString('base64')}`;
+            seeking = true;
+        });
+    } else if(mimeType == 'image/apng') {
+        start = false;
+        if(!loadedApngFrames){
+            if(!loadedBuffer){
+                await loadBuffer();
+                if(!loadedBuffer){
+                    return;
+                }
+            }
+            start = true;
+            apngObj = apng(loadedBuffer);
+            if(!apngCanvas){
+                apngCanvas = new OffscreenCanvas(apngObj.width, apngObj.height);
+            }
+            apngPlayer = await apngObj.getPlayer(apngCanvas.getContext('2d'), false);
+            loadedApngFrames = [];
+        }
+        if(start){
+            curSeekFrame = 0;
+            loadedApngFrames.push(await apngCanvas.convertToBlob());
+        } else {
+            delta = Math.sign(delta) * 1;
+            curSeekFrame = mod(curSeekFrame+delta, apngObj.frames.length);
+            if(curSeekFrame > loadedApngFrames.length-1){
+                while(apngPlayer.currentFrameNumber < curSeekFrame){
+                    apngPlayer.renderNextFrame();
+                    loadedApngFrames.push(await apngCanvas.convertToBlob());
+                }
+            }
+        }
+        let png = loadedApngFrames[curSeekFrame];
+        curEl.src = window.URL.createObjectURL(png);
+        
+        seeking = true;
+    }
 }

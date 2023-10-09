@@ -2,6 +2,7 @@ const electron = require('electron');
 const {app, BrowserWindow, ipcMain, webContents} = electron;
 
 let screen;
+let screenBounds;
 
 if(process.env.NODE_ENV === 'development'){
     require('electron-reload')(__dirname);
@@ -25,6 +26,7 @@ function createWindow(file){
         icon: __dirname + '/icon.png',
         webPreferences: {
             nodeIntegration: true,
+            contextIsolation: false,
             zoomFactor: 1.0
         },
         frame: false,
@@ -52,6 +54,24 @@ app.on('ready', (e) => {
     } else {
         createWindow();
     }
+
+    screenBounds = screen.getPrimaryDisplay().bounds;
+    let displays = screen.getAllDisplays();
+    displays.forEach(display => {
+        if(display === screen.getPrimaryDisplay()) return;
+        if(display.bounds.x < screenBounds.x){
+            screenBounds.x = display.bounds.x;
+        }
+        if(display.bounds.y < screenBounds.y){
+            screenBounds.y = display.bounds.y;
+        }
+        if(display.bounds.x+display.bounds.width > screenBounds.width){
+            screenBounds.width = display.bounds.x+display.bounds.width;
+        }
+        if(display.bounds.y+display.bounds.height > screenBounds.height){
+            screenBounds.height = display.bounds.y+display.bounds.height;
+        }
+    });
 });
 
 ipcMain.on('new', (e, file) => {
@@ -77,7 +97,7 @@ ipcMain.on('resize', (e, w, h, center = false, onscreen = false) => {
         let newX = oldX + Math.floor((oldW - w) / 2),
             newY = oldY + Math.floor((oldH - h) / 2);
         if(onscreen){
-            win.setPosition(Math.max(0,newX), Math.max(0,newY));
+            win.setPosition(Math.max(screenBounds.x,Math.min(screenBounds.width - w, newX)), Math.max(screenBounds.y,Math.min(screenBounds.height - h, newY)));
         } else {
             win.setPosition(newX, newY);
         }

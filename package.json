@@ -1,6 +1,6 @@
 {
   "name": "opti",
-  "version": "1.5.2",
+  "version": "1.6.0",
   "description": "simple image viewer",
   "main": "main.js",
   "scripts": {
@@ -21,8 +21,10 @@
     "electron-reload": "^1.4.0"
   },
   "dependencies": {
+    "apng-js": "^1.1.1",
     "datauri": "git+https://git@github.com/torcado194/datauri.git",
     "file-type": "^12.0.0",
+    "gif-frames": "git+https://git@github.com/torcado194/gif-frames.git",
     "mime-types": "^2.1.24"
   },
   "build": {
@@ -31,10 +33,12 @@
       "buildResources": "build"
     },
     "files": [
-      "!**/_*",
-      "!./dist/*",
-      "!./screenshots/*",
-      "!./package-lock.json"
+      "!_*",
+      "!dist/*",
+      "!screenshots/*",
+      "!package-lock.json",
+      "!**/.git",
+      "!**/.vscode"
     ],
     "appId": "com.electron.opti",
     "linux": {
