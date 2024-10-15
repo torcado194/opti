@@ -52,6 +52,7 @@ a simple, transparent media viewer
 |                     |                                         |
 |                `</>`| seek previous/next frame                |
 |             `+shift`|   (video) force 1/60th second           |
+|                  `s`| sync animation to clock                 |
 |                     |                                         |
 |             `ctrl+c`| copy bitmap                             |
 |               `+alt`| copy image data URI                     |

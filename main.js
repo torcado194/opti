@@ -3,6 +3,7 @@ const {app, BrowserWindow, ipcMain, webContents} = electron;
 
 let screen;
 let screenBounds;
+let reloading = false;
 
 if(process.env.NODE_ENV === 'development'){
     require('electron-reload')(__dirname);
@@ -35,6 +36,7 @@ function createWindow(file){
     });
     win.loadFile('src/index.html');
     win.webContents.on('did-finish-load', () => {
+        reloading = false;
         win.webContents.send('open', file ? [0, file] : process.argv);
     });
     win.on('closed', () => {
@@ -82,6 +84,10 @@ ipcMain.on('new', (e, file) => {
 });
 
 ipcMain.on('reload', (e, file) => {
+    if(reloading){
+        return;
+    }
+    reloading = true
     createWindow(file);
     let win = e.sender.getOwnerBrowserWindow();
     win.close();

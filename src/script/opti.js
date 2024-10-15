@@ -23,6 +23,7 @@ let canDrag = false,
     curEl,
     titleEl,
     helpEl,
+    syncIndicatorEl,
     containerEl,
     imageContainerEl,
     vidPaused = false,
@@ -84,9 +85,10 @@ let canDrag = false,
     loadedApngFrames,
     curSeekFrame = 0,
     seeking = false,
-    playbackStart
+    playbackStart,
     mouseOffsetX = 0,
-    mouseOffsetY = 0;
+    mouseOffsetY = 0,
+    syncTimeoutId;
 
 let MEDIA_EXTENSIONS = [
     'jpg',
@@ -159,10 +161,12 @@ ipcRenderer.on('open', (event, p) => {
 
 function loadInstance(file){
     ipcRenderer.send('new', file);
+    cancelSync();
 }
 
 function reload(){
-    ipcRenderer.send('reload', filename);
+    ipcRenderer.send('reload', fullpath);
+    cancelSync();
 }
 
 window.addEventListener('close', e => {
@@ -174,6 +178,7 @@ window.addEventListener('close', e => {
         cancelAnimationFrame(rotateAnimId);
         rotateAnimId = null;
     }
+    cancelSync();
 });
 
 function init(){
@@ -207,6 +212,8 @@ function init(){
     titleEl = document.getElementById('title');
     helpEl = document.getElementById('help');
     helpEl.style.opacity = ''
+    syncIndicatorEl = document.getElementById('syncIndicator');
+    syncIndicatorEl.style.opacity = ''
     
     containerEl = document.getElementById('container');
     imageContainerEl = document.getElementById('image-container');
@@ -343,6 +350,9 @@ window.addEventListener('keydown', e => {
             } else {
                 seekFrame(-1);
             }
+            break;
+        case 's':
+            syncAnimation();
             break;
     }
 });
@@ -661,6 +671,7 @@ function loadFile(pathname, ignoreLoad){
     }
     curUrl = null;
     fullpath = pathname;
+    console.log(fullpath)
     if(!ignoreLoad){
         loadDirectory(pathname);
     }
@@ -879,6 +890,7 @@ function loadDone(){
 }
 
 function resetData(){
+    cancelSync();
     loadedData = null;
     loadedBuffer = null;
     apngCanvas = null;
@@ -930,6 +942,7 @@ function resetAll(saveState, keepFrame){
             curEl.src = loadedSource;
         }
     }
+    cancelSync();
 
     vidEl.onload = null;
     vidEl.onerror = null;
@@ -1265,8 +1278,54 @@ function onResize(e){
     recenter();
 }
 
+async function loadGifFrames(){
+    if(loadedGifFrames) return loadedGifFrames;
+
+    if(!loadedBuffer){
+        await loadBuffer();
+        if(!loadedBuffer){
+            return;
+        }
+    }
+    loadedGifFrames = await gifFrames({ url: loadedBuffer, frames: 'all', outputType: 'png', cumulative: true });
+    //attempt to show current frame form playback
+    /* curSeekFrame = 0;
+    var acc = 0;
+    accumulatedGifDelays = [];
+    loadedGifFrames.forEach((v) => {
+        acc += v.frameInfo.delay / 100;
+        accumulatedGifDelays.push(acc);
+    });
+    var pos = Date.now() - playbackStart;
+    pos = mod(pos, accumulatedGifDelays[accumulatedGifDelays.length-1]); //naively assumes looping gif
+    for(i = 0; i < accumulatedGifDelays.length; i++){
+        if(accumulatedGifDelays[i] >= pos){
+            curSeekFrame = i;
+            break;
+        }
+    } */
+}
+
+async function loadApngFrames(){
+    if(loadedApngFrames) return loadedApngFrames;
+
+    if(!loadedBuffer){
+        await loadBuffer();
+        if(!loadedBuffer){
+            return;
+        }
+    }
+    apngObj = apng(loadedBuffer);
+    if(!apngCanvas){
+        apngCanvas = new OffscreenCanvas(apngObj.width, apngObj.height);
+    }
+    apngPlayer = await apngObj.getPlayer(apngCanvas.getContext('2d'), false);
+    loadedApngFrames = [];
+}
+
 async function seekFrame(delta = 1){
     if(!animated) return;
+    cancelSync();
     if(curEl === vidEl){
         if(!frameRate){
             frameRate = vidEl.captureStream().getVideoTracks()[0].getSettings().frameRate;
@@ -1282,31 +1341,9 @@ async function seekFrame(delta = 1){
     } else if(mimeType == 'image/gif') {
         var start = false;
         if(!loadedGifFrames){
-            if(!loadedBuffer){
-                await loadBuffer();
-                if(!loadedBuffer){
-                    return;
-                }
-            }
-            loadedGifFrames = await gifFrames({ url: loadedBuffer, frames: 'all', outputType: 'png', cumulative: true });
-            start = true;
-            //attempt to show current frame form playback
-            /* curSeekFrame = 0;
-            var acc = 0;
-            accumulatedGifDelays = [];
-            loadedGifFrames.forEach((v) => {
-                acc += v.frameInfo.delay / 100;
-                accumulatedGifDelays.push(acc);
-            });
-            var pos = Date.now() - playbackStart;
-            pos = mod(pos, accumulatedGifDelays[accumulatedGifDelays.length-1]); //naively assumes looping gif
-            for(i = 0; i < accumulatedGifDelays.length; i++){
-                if(accumulatedGifDelays[i] >= pos){
-                    curSeekFrame = i;
-                    break;
-                }
-            } */
+            start = true
         }
+        await loadGifFrames()
         if(start){
             curSeekFrame = 0;
         } else {
@@ -1326,20 +1363,9 @@ async function seekFrame(delta = 1){
     } else if(mimeType == 'image/apng') {
         start = false;
         if(!loadedApngFrames){
-            if(!loadedBuffer){
-                await loadBuffer();
-                if(!loadedBuffer){
-                    return;
-                }
-            }
-            start = true;
-            apngObj = apng(loadedBuffer);
-            if(!apngCanvas){
-                apngCanvas = new OffscreenCanvas(apngObj.width, apngObj.height);
-            }
-            apngPlayer = await apngObj.getPlayer(apngCanvas.getContext('2d'), false);
-            loadedApngFrames = [];
+            start = true
         }
+        await loadApngFrames()
         if(start){
             curSeekFrame = 0;
             loadedApngFrames.push(await apngCanvas.convertToBlob());
@@ -1357,5 +1383,51 @@ async function seekFrame(delta = 1){
         curEl.src = window.URL.createObjectURL(png);
         
         seeking = true;
+    }
+}
+
+function cancelSync(){
+    syncIndicatorEl.classList.remove('show');
+    if(syncTimeoutId){
+        clearTimeout(syncTimeoutId)
+        syncTimeoutId = null;
+    }
+}
+
+async function syncAnimation(){
+    if(!animated) return;
+    cancelSync();
+    if(curEl === vidEl){
+        console.log(vidEl.duration);
+        vidEl.currentTime = mod(Date.now(), vidEl.duration * 1000.0) / 1000.0
+        vidEl.play()
+    } else if(mimeType == 'image/gif') {
+        await loadGifFrames();
+        let duration = 0.0;
+        for(let frame of loadedGifFrames){
+            duration += frame.frameInfo.delay * 10;
+        }
+        console.log(duration, mod(Date.now(), duration));
+        syncTimeoutId = setTimeout(function(){
+            seeking = false;
+            curSeekFrame = 0;
+            curEl.src = loadedSource;
+            syncIndicatorEl.classList.remove('show');
+        }, duration - mod(Date.now(), duration))
+        syncIndicatorEl.classList.add('show');
+    } else if(mimeType == 'image/apng') {
+        await loadApngFrames();
+        let duration = 0.0;
+        for(let frame of apngObj.frames){
+            duration += frame.delay;
+        }
+        console.log(duration, mod(Date.now(), duration));
+        syncTimeoutId = setTimeout(function(){
+            seeking = false;
+            curSeekFrame = 0;
+            curEl.src = loadedSource;
+            syncIndicatorEl.classList.remove('show');
+        }, duration - mod(Date.now(), duration))
+        syncIndicatorEl.classList.add('show');
     }
 }
