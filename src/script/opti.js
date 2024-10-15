@@ -29,6 +29,7 @@ let canDrag = false,
     width = 0,
     height = 0,
     zoomStage = 0,
+    zoomStageStart = 0,
     zoom = 1,
     ignoreResize = [],
     ignoreReset = [],
@@ -46,6 +47,8 @@ let canDrag = false,
     rotateAnimId,
     mouseStartX,
     mouseStartY,
+    mouseGlobalStartX,
+    mouseGlobalStartY,
     mouseX,
     mouseY,
     mouseDown = false,
@@ -81,7 +84,9 @@ let canDrag = false,
     loadedApngFrames,
     curSeekFrame = 0,
     seeking = false,
-    playbackStart;
+    playbackStart
+    mouseOffsetX = 0,
+    mouseOffsetY = 0;
 
 let MEDIA_EXTENSIONS = [
     'jpg',
@@ -229,21 +234,27 @@ window.addEventListener('keydown', e => {
     checkMeta(e);
     switch(e.key.toLowerCase()){
         case 'arrowright':
-            if(e.shiftKey){
+            if(mouseDown){
+                nudgeMouse(1, 0)
+            } else if(e.shiftKey){
                 nextMedia();
             } else {
                 nextFile();
             }
             break;
         case 'arrowleft':
-            if(e.shiftKey){
+            if(mouseDown){
+                nudgeMouse(-1, 0)
+            } else if(e.shiftKey){
                 prevMedia();
             } else {
                 prevFile();
             }
             break;
         case 'arrowup':
-            if(e.altKey){
+            if(mouseDown){
+                nudgeMouse(0, -1)
+            } else if(e.altKey){
                 parentDirectory();
             } else {
                 if(shift){
@@ -254,7 +265,9 @@ window.addEventListener('keydown', e => {
             }
             break;
         case 'arrowdown':
-            if(shift){
+            if(mouseDown){
+                nudgeMouse(0, 1)
+            } else if(shift){
                 adjustOpacity(-1);
             } else {
                 relZoom(-1);
@@ -374,8 +387,16 @@ function onMouseDown(e) {
     if(!ctrl && !moveAnimId && mouseDown){
         moveAnimId = requestAnimationFrame(moveWindow);
     }
-    if(/*!ctrl && */!rotateAnimId && mouseRightDown){
-        rotateAnimId = requestAnimationFrame(mouseMoveGlobal);
+    if(mouseRightDown && !rotateAnimId){
+        var pos = ipcRenderer.sendSync('getCursorPosition', true);
+        mouseGlobalStartX = pos.x;
+        mouseGlobalStartY = pos.y;
+        if(alt){
+            zoomStageStart = zoomStage
+            rotateAnimId = requestAnimationFrame(mouseMoveGlobal);
+        } else {
+            rotateAnimId = requestAnimationFrame(mouseMoveGlobal);
+        }
     }
 }
 
@@ -386,6 +407,8 @@ function onMouseUp(e) {
     } else if(e.button === 2){
         mouseRightDown = false;
     }
+    mouseOffsetX = 0;
+    mouseOffsetY = 0;
     if(dragging){
         dragging = false;
         wasDragging = true;
@@ -401,7 +424,7 @@ function onMouseUp(e) {
 
 function moveWindow() {
     if(!ctrl){
-        ipcRenderer.send('windowMoving', mouseStartX, mouseStartY, filename);
+        ipcRenderer.send('windowMoving', mouseStartX - mouseOffsetX, mouseStartY - mouseOffsetY, filename);
         moveAnimId = requestAnimationFrame(moveWindow);
     }
 }
@@ -409,6 +432,16 @@ function panWindow(dx, dy) {
     if(!ctrl){
         ipcRenderer.send('panWindow', dx, dy);
     }
+}
+
+function nudgeMouse(dx, dy) {
+    if(shift){
+        dx *= 10
+        dy *= 10
+    }
+    mouseOffsetX += dx;
+    mouseOffsetY += dy;
+    updatePan()
 }
 
 function onMouseMove(e) {
@@ -420,17 +453,30 @@ function onMouseMove(e) {
     if(!ctrl){
         return;
     }
+    updatePan()
+}
+
+function updatePan(){
     if(ctrl && mouseDown){
-        pan(mouseX - mouseStartX, mouseY - mouseStartY);
+        pan(mouseX - mouseStartX + mouseOffsetX, mouseY - mouseStartY + mouseOffsetY);
     }
 }
 
 function mouseMoveGlobal(){
-    let {x, y} = ipcRenderer.sendSync('getCursorPosition');
-    mouseX = x;
-    mouseY = y;
     if(mouseRightDown){
-        rotateCoords(mouseX, mouseY, mouseStartX, mouseStartY);
+        if(alt){
+            let {x, y} = ipcRenderer.sendSync('getCursorPosition', true);
+            mouseX = x;
+            mouseY = y;
+            zoomStage = zoomStageStart + (mouseY - mouseGlobalStartY) / 100.0
+            console.log(zoomStage, mouseY, mouseGlobalStartY)
+            updateZoom()
+        } else {
+            let {x, y} = ipcRenderer.sendSync('getCursorPosition', false);
+            mouseX = x;
+            mouseY = y;
+            rotateCoords(mouseX, mouseY, mouseStartX, mouseStartY);
+        }
     }
     rotateAnimId = requestAnimationFrame(mouseMoveGlobal);
 }
@@ -910,11 +956,16 @@ function resetAll(saveState, keepFrame){
         relZoom(0);
         pan(panX = panStartX = 0, panY = panStartY = 0);
         vidPaused = false;
-        if(curEl){
-            resizeWindow(Math.min(screenBounds.width, width), Math.min(screenBounds.height, height), true, true);
+        if(!keepFrame){
+            if(curEl){
+                resizeWindow(Math.min(screenBounds.width, width), Math.min(screenBounds.height, height), true, true);
+            } else {
+                resizeWindow(500, 500, true, true);
+            }
         } else {
-            resizeWindow(500, 500, true, true);
+            curEl.classList.add('contain');
         }
+        recenter();
     }
 }
 

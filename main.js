@@ -135,10 +135,14 @@ ipcMain.on('setPassthrough', (e, state) => {
     win.setIgnoreMouseEvents(state);
 });
 
-ipcMain.on('getCursorPosition', (e) => {
+ipcMain.on('getCursorPosition', (e, global = false) => {
     let win = e.sender.getOwnerBrowserWindow();
-    const { x, y } = electron.screen.getCursorScreenPoint(),
-          [winX, winY] = win.getPosition();
-    e.returnValue = {x: x - winX, y: y - winY};
+    const { x, y } = electron.screen.getCursorScreenPoint()
+    if(global) {
+        e.returnValue = {x: x, y: y};
+    } else {
+        const [winX, winY] = win.getPosition();
+        e.returnValue = {x: x - winX, y: y - winY};
+    }
     //win.webContents.send('mousemove', , );
 });
