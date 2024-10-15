@@ -241,7 +241,7 @@ window.addEventListener('keydown', e => {
     checkMeta(e);
     switch(e.key.toLowerCase()){
         case 'arrowright':
-            if(mouseDown){
+            if(mouseDown || mouseRightDown){
                 nudgeMouse(1, 0)
             } else if(e.shiftKey){
                 nextMedia();
@@ -250,7 +250,7 @@ window.addEventListener('keydown', e => {
             }
             break;
         case 'arrowleft':
-            if(mouseDown){
+            if(mouseDown || mouseRightDown){
                 nudgeMouse(-1, 0)
             } else if(e.shiftKey){
                 prevMedia();
@@ -259,7 +259,7 @@ window.addEventListener('keydown', e => {
             }
             break;
         case 'arrowup':
-            if(mouseDown){
+            if(mouseDown || mouseRightDown){
                 nudgeMouse(0, -1)
             } else if(e.altKey){
                 parentDirectory();
@@ -272,7 +272,7 @@ window.addEventListener('keydown', e => {
             }
             break;
         case 'arrowdown':
-            if(mouseDown){
+            if(mouseDown || mouseRightDown){
                 nudgeMouse(0, 1)
             } else if(shift){
                 adjustOpacity(-1);
@@ -478,8 +478,7 @@ function mouseMoveGlobal(){
             let {x, y} = ipcRenderer.sendSync('getCursorPosition', true);
             mouseX = x;
             mouseY = y;
-            zoomStage = zoomStageStart + (mouseY - mouseGlobalStartY) / 100.0
-            console.log(zoomStage, mouseY, mouseGlobalStartY)
+            zoomStage = zoomStageStart + (mouseY - mouseGlobalStartY + mouseOffsetY) / 100.0
             updateZoom()
         } else {
             let {x, y} = ipcRenderer.sendSync('getCursorPosition', false);
@@ -952,7 +951,7 @@ function resetAll(saveState, keepFrame){
     audEl.onload = null;
     audEl.onerror = null;
     audEl.onloadedmetadata = null;
-    if(!saveState && !windowLocked){
+    if(!saveState){
         imgEl.classList.remove('flipx');
         imgEl.classList.remove('flipy');
         vidEl.classList.remove('flipx');
@@ -1398,7 +1397,6 @@ async function syncAnimation(){
     if(!animated) return;
     cancelSync();
     if(curEl === vidEl){
-        console.log(vidEl.duration);
         vidEl.currentTime = mod(Date.now(), vidEl.duration * 1000.0) / 1000.0
         vidEl.play()
     } else if(mimeType == 'image/gif') {
@@ -1407,7 +1405,6 @@ async function syncAnimation(){
         for(let frame of loadedGifFrames){
             duration += frame.frameInfo.delay * 10;
         }
-        console.log(duration, mod(Date.now(), duration));
         syncTimeoutId = setTimeout(function(){
             seeking = false;
             curSeekFrame = 0;
@@ -1421,7 +1418,6 @@ async function syncAnimation(){
         for(let frame of apngObj.frames){
             duration += frame.delay;
         }
-        console.log(duration, mod(Date.now(), duration));
         syncTimeoutId = setTimeout(function(){
             seeking = false;
             curSeekFrame = 0;

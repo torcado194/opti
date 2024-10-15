@@ -42,7 +42,7 @@ a simple, transparent media viewer
 |                     |                                         |
 |        `right-click`| rotate                                  |
 |             `+shift`|   snap-rotate                           |
-|               `+alt`| drag-zoom image                         |
+|               `+alt`| drag-scale image                        |
 |                     |                                         |
 |         `drag edges`| blurry scale image and window           |
 |  `scroll \| up/down`| pixel scale image and window            |
