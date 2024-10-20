@@ -233,6 +233,15 @@ function init(){
             vidEl.play();
         }
     });
+
+    vidEl.addEventListener('volumechange', e => {
+        localStorage.setItem("volume", vidEl.volume);
+    });
+    audEl.addEventListener('volumechange', e => {
+        localStorage.setItem("volume", audEl.volume);
+    });
+    vidEl.volume = localStorage.getItem("volume");
+    audEl.volume = localStorage.getItem("volume");
 }
 window.onload = init;
 
@@ -920,6 +929,10 @@ function resetAll(saveState, keepFrame){
     } else if(curEl === audEl) {
         width = curEl.clientWidth;
         height = curEl.clientHeight;
+    }
+    if(width == 0 && height == 0){
+        width = 400;
+        height = 400;
     }
     
     if(curEl !== vidEl) {
