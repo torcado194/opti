@@ -309,11 +309,15 @@ window.addEventListener('keydown', e => {
             window.close();
             break;
         case ' ':
-            if(!e.shiftKey && (curEl === vidEl || curEl === audEl)){
-                wasDragging = false;
-                togglePause();
-            } else {
-                resetAll(false, e.ctrlKey);
+            e.preventDefault();
+            e.stopPropagation();
+            if(!e.repeat){
+                if(!e.shiftKey && (curEl === vidEl || curEl === audEl)){
+                    wasDragging = false;
+                    togglePause();
+                } else {
+                    resetAll(false, e.ctrlKey);
+                }
             }
             break;
         case 'c':
@@ -378,10 +382,15 @@ window.addEventListener('keydown', e => {
             syncAnimation();
             break;
     }
-});
+}, true);
 window.addEventListener('keyup', e => {
     checkMeta(e);
-});
+    switch(e.key.toLowerCase()){
+        case ' ':
+            e.preventDefault();
+            break;
+    }
+}, true);
 
 function checkMeta(e){
     if(typeof e.shiftKey === 'boolean'){
