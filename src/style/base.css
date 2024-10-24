@@ -75,6 +75,9 @@ audio {
   height: inherit;
   object-fit: contain;
 }
+.forceMiddle {
+  height: 50px;
+}
 .flipx {
   transform: scaleX(-1);
 }

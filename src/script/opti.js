@@ -88,7 +88,9 @@ let canDrag = false,
     playbackStart,
     mouseOffsetX = 0,
     mouseOffsetY = 0,
-    syncTimeoutId;
+    syncTimeoutId,
+    nameState = 0,
+    userNameState = 0;
 
 let MEDIA_EXTENSIONS = [
     'jpg',
@@ -233,15 +235,17 @@ function init(){
             vidEl.play();
         }
     });
-
+    let vol = ipcRenderer.sendSync('getData', "volume");
+    if(vol !== null){
+        vidEl.volume = parseFloat(vol);
+        audEl.volume = parseFloat(vol);
+    }
     vidEl.addEventListener('volumechange', e => {
-        localStorage.setItem("volume", vidEl.volume);
+        ipcRenderer.send('setData', "volume", vidEl.volume);
     });
     audEl.addEventListener('volumechange', e => {
-        localStorage.setItem("volume", audEl.volume);
+        ipcRenderer.send('setData', "volume", audEl.volume);
     });
-    vidEl.volume = localStorage.getItem("volume");
-    audEl.volume = localStorage.getItem("volume");
 }
 window.onload = init;
 
@@ -305,7 +309,12 @@ window.addEventListener('keydown', e => {
             window.close();
             break;
         case ' ':
-            resetAll(false, e.ctrlKey);
+            if(!e.shiftKey && (curEl === vidEl || curEl === audEl)){
+                wasDragging = false;
+                togglePause();
+            } else {
+                resetAll(false, e.ctrlKey);
+            }
             break;
         case 'c':
             if(e.ctrlKey){
@@ -320,6 +329,11 @@ window.addEventListener('keydown', e => {
         case 'o':
             if(fullpath){
                 shell.showItemInFolder(fullpath);
+            }
+            break;
+        case 'n':
+            if(fullpath){
+                toggleName();
             }
             break;
         case 'r':
@@ -622,14 +636,30 @@ function showDirectory(){
     curEl = imgEl;
     imgEl.src = 'image/optiFolder.svg';
     imgEl.onload = () => resetAll();
-    titleEl.textContent = path.basename(fullpath);
+    nameState = 1;
+    updateName();
 }
 
 function showFileError(){
     curEl = imgEl;
     imgEl.src = 'image/optiFileError.svg';
     imgEl.onload = () => resetAll(ctrl);
-    titleEl.textContent = path.basename(fullpath);
+    nameState = 1;
+    updateName();
+}
+
+function toggleName(){
+    userNameState = nameState = mod(nameState+1,3);
+    updateName();
+}
+function updateName(){
+    if(nameState === 0){
+        titleEl.textContent = '';
+    } else if(nameState == 1){
+        titleEl.textContent = path.basename(fullpath);
+    } else if(nameState == 2){
+        titleEl.textContent = fullpath;
+    }
 }
 
 function toggleHelp(){
@@ -651,6 +681,14 @@ function updateHelp(){
         } else {
             table.style.transform = '';
         }
+    }
+}
+
+function togglePause(){
+    if(curEl.paused === true){
+        curEl.play();
+    } else if(curEl.paused === false){
+        curEl.pause();
     }
 }
 
@@ -885,7 +923,7 @@ function loadData(data, mime){
 
 function loadDone(){
     loadedSource = curEl.src;
-    titleEl.textContent = '';
+    nameState = userNameState;
     if(curEl === imgEl && animated){
         playbackStart = Date.now();
     }
@@ -930,9 +968,15 @@ function resetAll(saveState, keepFrame){
         width = curEl.clientWidth;
         height = curEl.clientHeight;
     }
+
+    imgEl.classList.remove('forceMiddle');
+    vidEl.classList.remove('forceMiddle');
+    audEl.classList.remove('forceMiddle');
     if(width == 0 && height == 0){
         width = 400;
         height = 400;
+        curEl.classList.add('forceMiddle');
+        nameState = 1;
     }
     
     if(curEl !== vidEl) {
@@ -955,6 +999,8 @@ function resetAll(saveState, keepFrame){
         }
     }
     cancelSync();
+    
+    updateName();
 
     vidEl.onload = null;
     vidEl.onerror = null;
@@ -972,7 +1018,7 @@ function resetAll(saveState, keepFrame){
 
         opacity = 1;
         containerEl.style.opacity = opacity;
-        
+
         startAngle = 0;
         rotate(0);
         isRotated = false;

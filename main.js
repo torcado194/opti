@@ -1,5 +1,7 @@
 const electron = require('electron');
 const {app, BrowserWindow, ipcMain, webContents} = electron;
+const fs = require("fs");
+const path = require('path');
 
 let screen;
 let screenBounds;
@@ -15,7 +17,25 @@ let minWidth = 120,
 process.env.MIN_WIDTH = minWidth;
 process.env.MIN_HEIGHT = minHeight;
 
-function createWindow(file){
+const instances = [];
+
+function getArgs(argv){
+    if(!Array.isArray(argv)){
+        argv = argv.split(" ");
+    }
+    let args = [];
+
+    for(let v of argv){
+        if(typeof v === 'string' && v.startsWith("--")){
+            continue
+        }
+        args.push(v);
+    }
+
+    return args;
+}
+
+function createWindow(argv){
     let win = new BrowserWindow({
         width: 800,
         height: 600,
@@ -37,27 +57,53 @@ function createWindow(file){
     win.loadFile('src/index.html');
     win.webContents.on('did-finish-load', () => {
         reloading = false;
-        win.webContents.send('open', file ? [0, file] : process.argv);
+        let args = getArgs(argv ? argv : process.argv);
+        win.webContents.send('open', args);
     });
     win.on('closed', () => {
         win = null;
     });
-    screen = electron.screen;
-    getBounds();
+    instances.push(win);
 }
 
 app.commandLine.appendSwitch('high-dpi-support', 1);
 app.commandLine.appendSwitch('force-device-scale-factor', 1);
 
-app.on('ready', (e) => {
-    if(process.platform === 'linux'){
-        setTimeout(()=>{
+
+const locked = app.requestSingleInstanceLock();
+let cmdQPressed = false;
+if (!locked) {
+    app.quit();
+} else {
+    app.on('second-instance', (event, argv, workingDirectory) => {
+        createWindow(argv);
+    });
+    app.on('ready', (e) => {
+        console.log("ready");
+        if(process.platform === 'linux'){
+            setTimeout(()=>{
+                createWindow();
+            }, 300);
+        } else {
             createWindow();
-        }, 300);
-    } else {
-        createWindow();
+        }
+        screen = electron.screen;
+        getBounds();
+    });
+    if (process.platform === 'darwin') {
+        // Quit from the dock context menu should quit the application directly
+        app.on('before-quit', () => {
+            cmdQPressed = true;
+        });
     }
-});
+    app.on('window-all-closed', () => {
+        if (cmdQPressed || process.platform !== 'darwin') {
+            app.quit();
+        }
+    });
+    
+    app.on('activate', () => createWindow());
+}
 
 function getBounds(){
     screenBounds = screen.getPrimaryDisplay().bounds;
@@ -80,7 +126,7 @@ function getBounds(){
 }
 
 ipcMain.on('new', (e, file) => {
-    createWindow(file);
+    createWindow(["", file]);
 });
 
 ipcMain.on('reload', (e, file) => {
@@ -88,11 +134,49 @@ ipcMain.on('reload', (e, file) => {
         return;
     }
     reloading = true
-    createWindow(file);
+    createWindow(["", file]);
     let win = e.sender.getOwnerBrowserWindow();
     win.close();
     win = null;
 });
+
+const debounce = (callback, wait) => {
+    let timeoutId = null;
+    return (...args) => {
+        clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => {
+            callback(...args);
+        }, wait);
+    };
+}
+
+ipcMain.on('getData', (e, key) => {
+    e.returnValue = getData(key);
+});
+function getData(key) {
+    let file = path.join(app.getPath('userData'), 'data.json');
+    if(!fs.existsSync(file)){
+        fs.writeFileSync(file, JSON.stringify({}));
+    }
+    let data = JSON.parse(fs.readFileSync(file));
+    if(key){
+        return data[key];
+    } else {
+        return data;
+    }
+}
+
+ipcMain.on('setData', (e, key, value) => {
+    setDataDebounce(key, value);
+});
+function setData(key, value) {
+    let file = path.join(app.getPath('userData'), 'data.json');
+    let data = getData();
+    data[key] = value;
+
+    fs.writeFileSync(file, JSON.stringify(data));
+}
+const setDataDebounce = debounce(setData, 200);
 
 ipcMain.on('resize', (e, w, h, center = false, onscreen = false) => {
     let win = e.sender.getOwnerBrowserWindow();
@@ -114,7 +198,6 @@ ipcMain.on('resize', (e, w, h, center = false, onscreen = false) => {
 });
 
 ipcMain.on('windowMoving', (e, startX, startY, filename) => {
-    //console.log('ccc');
     let win = e.sender.getOwnerBrowserWindow();
     const { x, y } = electron.screen.getCursorScreenPoint();
     win.setPosition(x - startX, y - startY);
@@ -125,7 +208,6 @@ ipcMain.on('windowMoved', () => {
 });
 
 ipcMain.on('panWindow', (e, dx, dy) => {
-    //console.log('ccc');
     let win = e.sender.getOwnerBrowserWindow();
     const [ x, y ] = win.getPosition();
     win.setPosition(Math.round(x + dx), Math.round(y + dy));
@@ -150,5 +232,4 @@ ipcMain.on('getCursorPosition', (e, global = false) => {
         const [winX, winY] = win.getPosition();
         e.returnValue = {x: x - winX, y: y - winY};
     }
-    //win.webContents.send('mousemove', , );
 });
