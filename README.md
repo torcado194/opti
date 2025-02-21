@@ -61,6 +61,7 @@ a simple, transparent media viewer
 |                      |                                         |
 |`space \| shift+space`| reset image | reset player              |
 |               `+ctrl`|   keep window size and animation frame  |
+|                   `r`| reload file data                        |
+|              `+shift`|   restart application                   |
 |                 `f11`|   full screen                           |
 |              `escape`| close                                   |
-|                   `r`| reload                                  |

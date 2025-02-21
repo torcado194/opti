@@ -341,7 +341,11 @@ window.addEventListener('keydown', e => {
             }
             break;
         case 'r':
-            reload();
+            if(e.shiftKey){
+                reload();
+            } else {
+                reloadFile();
+            }
             break;
         case 'f':
             if(e.shiftKey){
@@ -744,6 +748,12 @@ function loadFile(pathname, ignoreLoad){
     });
 }
 
+function reloadFile(){
+    if(context == "file" && fullpath){
+        loadFileUrl(fullpath + ("#" + new Date().getTime()), true);
+    }
+}
+
 async function readFirstNBytes(path, n) {
     const chunks = [];
     for await (let chunk of fs.createReadStream(path, { start: 0, end: n })) {
@@ -781,9 +791,9 @@ function loadUrl(url){
     }
 }
 
-function loadFileUrl(path){
+function loadFileUrl(path, noReset = false){
     context = 'file';
-    tryLoad(path);
+    tryLoad(path, noReset);
     loadMetadata(path);
 }
 
@@ -810,7 +820,7 @@ function loadFileBuffer(pathname = null){
     loadedBuffer = fs.readFileSync(pathname);
 }
 
-function tryLoad(src){
+function tryLoad(src, noReset = false){
     resetData();
     curEl && curEl.removeAttribute('src');
 
@@ -819,19 +829,19 @@ function tryLoad(src){
         curEl = imgEl;
         curEl.setAttribute('src', src);
         curEl.onerror = tryVideo;
-        curEl.onload = loadDone;
+        curEl.onload = () => loadDone(noReset);
     }
     function tryVideo(){
         curEl = vidEl;
         curEl.setAttribute('src', src);
         curEl.onerror = tryAudio;
-        curEl.onloadedmetadata = loadDone;
+        curEl.onloadedmetadata = () => loadDone(noReset);
     }
     function tryAudio(){
         curEl = audEl;
         curEl.setAttribute('src', src);
         curEl.onerror = showFileError;
-        curEl.onloadedmetadata = loadDone;
+        curEl.onloadedmetadata = () => loadDone(noReset);
     }
 }
 
@@ -930,17 +940,19 @@ function loadData(data, mime){
     load(mime, data, true);
 }
 
-function loadDone(){
+function loadDone(noReset = false){
     loadedSource = curEl.src;
     nameState = userNameState;
     if(curEl === imgEl && animated){
         playbackStart = Date.now();
     }
-    if(forceReset){
-        forceReset = false;
-        resetAll();
-    } else {
-        resetAll(ctrl);
+    if(!noReset){
+        if(forceReset){
+            forceReset = false;
+            resetAll();
+        } else {
+            resetAll(ctrl);
+        }
     }
 }
 
