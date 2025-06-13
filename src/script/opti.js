@@ -787,14 +787,18 @@ function loadUrl(url){
         let mime = url.substring(url.indexOf(":")+1, url.indexOf(";"));
         load(mime, url);
     } else {
-        tryLoad(url);
+        tryLoad(encodeFileUri(path));
     }
 }
 
 function loadFileUrl(path, noReset = false){
     context = 'file';
-    tryLoad(path, noReset);
+    tryLoad(encodeFileUri(path), noReset);
     loadMetadata(path);
+}
+
+function encodeFileUri(uri){
+    return uri.replace(/%/g, '%25').replace(/#/g, '%23');
 }
 
 async function loadBuffer(){
@@ -858,18 +862,18 @@ function load(mime, src, isData = false){
         curEl = imgEl;
         curEl.setAttribute('src', src);
         curEl.onerror = showFileError;
-        curEl.onload = loadDone;
+        curEl.onload = () => loadDone();
     } else if(mime.startsWith('video')){
         animated = true;
         curEl = vidEl;
         curEl.setAttribute('src', src);
         curEl.onerror = showFileError;
-        curEl.onloadedmetadata = loadDone;
+        curEl.onloadedmetadata = () => loadDone();
     } else if(mime.startsWith('audio')){
         curEl = audEl;
         curEl.setAttribute('src', src);
         curEl.onerror = showFileError;
-        curEl.onloadedmetadata = loadDone;
+        curEl.onloadedmetadata = () => loadDone();
     } else {
         // tryLoad(src);
         showFileError();

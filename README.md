@@ -22,6 +22,7 @@ a simple, transparent media viewer
 |                   `?`| show help                               |
 |                   `b`| toggle border                           |
 |                   `a`| toggle always on top                    |
+|                   `p`| toggle cursor passthrough               |
 |                   `l`| lock window position/size               |
 |                      |                                         |
 |          `right/left`| next/previous file                      |

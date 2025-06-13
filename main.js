@@ -69,6 +69,7 @@ function createWindow(argv){
 app.commandLine.appendSwitch('high-dpi-support', 1);
 app.commandLine.appendSwitch('force-device-scale-factor', 1);
 app.commandLine.appendSwitch('enable-features', 'PlatformHEVCDecoderSupport');
+app.commandLine.appendSwitch('force-color-profile', 'srgb');
 
 
 const locked = app.requestSingleInstanceLock();

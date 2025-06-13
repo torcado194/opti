@@ -1,6 +1,6 @@
 {
   "name": "opti",
-  "version": "1.6.7",
+  "version": "1.6.8",
   "description": "simple image viewer",
   "main": "main.js",
   "scripts": {
